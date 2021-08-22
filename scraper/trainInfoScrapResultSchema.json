@@ -5,7 +5,7 @@
 	"definitions": {
 		"delayType": {
 			"description": "Delay of the train (negative for being early)",
-			"type": "number"
+			"type": "integer"
 		},
 		"stationArrDepTime": {
 			"description": "Time of arrival at/departure from station",
@@ -105,11 +105,12 @@
 					},
 					"km": {
 						"description": "The distance the train travelled until reaching this station",
-						"type": "number"
+						"type": "integer"
 					},
 					"stoppingTime": {
 						"description": "The number of minutes the train is scheduled to stop in this station",
-						"type": ["number", "null"]
+						"type": ["integer", "null"],
+						"minimum": 1
 					},
 					"platform": {
 						"description": "The platform the train stopped at",
