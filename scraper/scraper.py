@@ -7,6 +7,10 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import quote, urlencode
 
+TRAIN_INFO_REGEX = re.compile(r'^([A-Z-]+) ([0-9]+) în ([0-9.]+)$')
+
+OPERATOR_REGEX = re.compile(r'^Operat de (.+)$')
+
 SL_REGEX = re.compile(r'^(?:Fără|([0-9]+) min) (întârziere|mai devreme) la (trecerea fără oprire prin|sosirea în|plecarea din) (.+)\.$')
 SL_STATE_MAP = {
 	't': 'passing',
@@ -61,17 +65,6 @@ def scrape(train_no: int, use_yesterday=False, date_override=None):
 
 	soup = BeautifulSoup(r.text, features='html.parser')
 	sform = soup.find(id='form-search')
-	# required_fields = [
-	# 	'Date',
-	# 	'TrainRunningNumber',
-	# 	'SelectedBranchCode',
-	# 	'ReCaptcha',
-	# 	'ConfirmationKey',
-	# 	'IsSearchWanted',
-	# 	'IsReCaptchaFailed',
-	# 	'__RequestVerificationToken',
-	# ]
-	# result_data = { field: sform.find('input', attrs={'name': field})['value'] for field in required_fields }
 	result_data = { elem['name']: elem['value'] for elem in sform('input') }
 
 	r = s.post('https://mersultrenurilor.infofer.ro/ro-RO/Trains/TrainsResult', data=result_data)
@@ -79,7 +72,15 @@ def scrape(train_no: int, use_yesterday=False, date_override=None):
 
 	scraped = {}
 
-	results_div = soup('div', recursive=False)[3].div
+	train_info_div, _, _, results_div, *_ = soup('div', recursive=False)
+
+	train_info_div = train_info_div.div('div', recursive=False)[0]
+
+	scraped['rank'], scraped['number'], scraped['date'] = TRAIN_INFO_REGEX.match(collapse_space(train_info_div.h2.text)).groups()
+
+	scraped['operator'] = OPERATOR_REGEX.match(collapse_space(train_info_div.p.text)).groups()[0]
+
+	results_div = results_div.div
 	status_div = results_div('div', recursive=False)[0]
 	route_text = collapse_space(status_div.h4.text)
 	route_from, route_to = ROUTE_REGEX.match(route_text).groups()

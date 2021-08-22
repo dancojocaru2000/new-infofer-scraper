@@ -34,6 +34,37 @@
 	},
 	"type": "object",
 	"properties": {
+		"rank": {
+			"description": "The rank of the train",
+			"type": "string",
+			"examples": [
+				"74",
+				"15934"
+			]
+		},
+		"number": {
+			"description": "The number of the train",
+			"type": "string",
+			"examples": [
+				"R",
+				"R-E",
+				"IR",
+				"IRN"
+			]
+		},
+		"date": {
+			"description": "Date of departure from the first station",
+			"type": "string"
+		},
+		"operator": {
+			"description": "Operator of the train",
+			"type": "string",
+			"examples": [
+				"CFR Călători",
+				"Softrans",
+				"Regio Călători"
+			]
+		},
 		"route": {
 			"description": "Route of the train",
 			"type": "object",
