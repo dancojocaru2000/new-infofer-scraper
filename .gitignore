@@ -1,0 +1,5 @@
+# CPython compiler output
+*.pyc
+
+# VS Code
+.vscode

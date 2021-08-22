@@ -1,0 +1,99 @@
+{
+	"$schema": "http://json-schema.org/schema",
+	"title": "Train Info InfoFer Scrap Result Schema",
+	"description": "Results of scrapping InfoFer website for train info",
+	"definitions": {
+		"delayType": {
+			"description": "Delay of the train (negative for being early)",
+			"type": "number"
+		},
+		"stationArrDepTime": {
+			"description": "Time of arrival at/departure from station",
+			"type": ["object", "null"],
+			"properties": {
+				"scheduleTime": {
+					"description": "The time the train is scheduled to arrive/depart",
+					"type": "string"
+				},
+				"status": {
+					"type": ["object", "null"],
+					"properties": {
+						"delay": {
+							"$ref": "#/definitions/delayType"
+						},
+						"real": {
+							"description": "Determines whether delay was actually reported or is an approximation",
+							"type": "boolean"
+						}
+					},
+					"required": ["delay", "real"]
+				}
+			},
+			"required": ["scheduleTime"]
+		}
+	},
+	"type": "object",
+	"properties": {
+		"route": {
+			"description": "Route of the train",
+			"type": "object",
+			"properties": {
+				"from": {
+					"type": "string"
+				},
+				"to": {
+					"type": "string"
+				}
+			},
+			"required": ["from", "to"]
+		},
+		"status": {
+			"description": "Current status of the train",
+			"type": ["object", "null"],
+			"properties": {
+				"delay": {
+					"$ref": "#/definitions/delayType"
+				},
+				"station": {
+					"type": "string"
+				},
+				"state": {
+					"type": "string",
+					"enum": ["passing", "arrival", "departure"]
+				}
+			}
+		},
+		"stations": {
+			"description": "List of stations the train stops at",
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"km": {
+						"description": "The distance the train travelled until reaching this station",
+						"type": "number"
+					},
+					"stoppingTime": {
+						"description": "The number of minutes the train is scheduled to stop in this station",
+						"type": ["number", "null"]
+					},
+					"platform": {
+						"description": "The platform the train stopped at",
+						"type": ["string", "null"]
+					},
+					"arrival": {
+						"$ref": "#/definitions/stationArrDepTime"
+					},
+					"departure": {
+						"$ref": "#/definitions/stationArrDepTime"
+					}
+				},
+				"required": ["name", "km"]
+			}
+		}
+	},
+	"required": ["route", "stations"]
+}
