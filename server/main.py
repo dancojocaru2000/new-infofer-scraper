@@ -1,5 +1,5 @@
 from gevent.pywsgi import WSGIServer
-from server import app
+from server.server import app
 
 def main():
 	port = 5000

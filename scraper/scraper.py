@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta
 import re
 
+import pytz
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import quote, urlencode
@@ -29,6 +30,18 @@ PLATFORM_REGEX = re.compile(r'^linia (.+)$')
 STOPPING_TIME_REGEX = re.compile(r'^([0-9]+) min oprire$')
 
 STATION_DEPARR_STATUS_REGEX = re.compile(r'^(?:(la timp)|(?:((?:\+|-)[0-9]+) min \((?:(?:întârziere)|(?:mai devreme))\)))(\*?)$')
+
+class DateTimeSequencer:
+	def __init__(self, year: int, month: int, day: int) -> None:
+		self.current = datetime(year, month, day, 0, 0, 0)
+		self.current -= timedelta(seconds=1)
+
+	def __call__(self, hour: int, minute: int = 0, second: int = 0) -> datetime:
+		potential_new_date = datetime(self.current.year, self.current.month, self.current.day, hour, minute, second)
+		if (self.current > potential_new_date):
+			potential_new_date += timedelta(days=1)
+		self.current = potential_new_date
+		return self.current
 
 def collapse_space(string: str) -> str:
 	return re.sub(
@@ -77,6 +90,8 @@ def scrape(train_no: int, use_yesterday=False, date_override=None):
 	train_info_div = train_info_div.div('div', recursive=False)[0]
 
 	scraped['rank'], scraped['number'], scraped['date'] = TRAIN_INFO_REGEX.match(collapse_space(train_info_div.h2.text)).groups()
+	date_d, date_m, date_y = (int(comp) for comp in scraped['date'].split('.'))
+	date = datetime(date_y, date_m, date_d)
 
 	scraped['operator'] = OPERATOR_REGEX.match(collapse_space(train_info_div.p.text)).groups()[0]
 
@@ -101,6 +116,8 @@ def scrape(train_no: int, use_yesterday=False, date_override=None):
 
 	stations = status_div.ul('li', recursive=False)
 	scraped['stations'] = []
+	dt_seq = DateTimeSequencer(date.year, date.month, date.day)
+	tz = pytz.timezone('Europe/Bucharest')
 	for station in stations:
 		station_scraped = {}
 
@@ -126,6 +143,8 @@ def scrape(train_no: int, use_yesterday=False, date_override=None):
 
 				time, *_ = parts
 				result['scheduleTime'] = collapse_space(time.text)
+				st_hr, st_min = (int(comp) for comp in result['scheduleTime'].split(':'))
+				result['scheduleTime'] = tz.localize(dt_seq(st_hr, st_min)).isoformat()
 				if len(parts) >= 2:
 					_, status, *_ = parts
 					result['status'] = {}
