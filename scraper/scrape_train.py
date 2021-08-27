@@ -35,7 +35,7 @@ STATION_DEPARR_STATUS_REGEX = re.compile(r'^(?:(la timp)|(?:((?:\+|-)[0-9]+) min
 
 # endregion
 
-def scrape(train_no: int, use_yesterday=False, date_override=None):
+def scrape(train_no: str, use_yesterday=False, date_override=None):
 	# Start scrapping session
 	s = requests.Session()
 

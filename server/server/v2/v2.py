@@ -38,8 +38,8 @@ train_data_cache = {}
 def get_train_info_schema():
 	return jsonify(TRAIN_INFO_SCHEMA['v2'])
 
-@bp.route('/train/<int:train_no>')
-def get_train_info(train_no: int):
+@bp.route('/train/<train_no>')
+def get_train_info(train_no: str):
 	use_yesterday = check_yes_no(request.args.get('use_yesterday', ''), default=False)
 	@filtered_data
 	def get_data():
