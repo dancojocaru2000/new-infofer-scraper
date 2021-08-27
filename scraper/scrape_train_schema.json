@@ -1,6 +1,6 @@
 {
 	"$schema": "http://json-schema.org/schema",
-	"title": "Train Info InfoFer Scrap Result Schema",
+	"title": "Train Info InfoFer Scrap Train Schema",
 	"description": "Results of scrapping InfoFer website for train info",
 	"definitions": {
 		"delayType": {
@@ -13,7 +13,8 @@
 			"properties": {
 				"scheduleTime": {
 					"description": "The time the train is scheduled to arrive/depart",
-					"type": "string"
+					"type": "string",
+					"pattern": "^[0-9]{1,2}:[0-9]{2}$"
 				},
 				"status": {
 					"type": ["object", "null"],
@@ -38,23 +39,24 @@
 			"description": "The rank of the train",
 			"type": "string",
 			"examples": [
-				"74",
-				"15934"
-			]
-		},
-		"number": {
-			"description": "The number of the train",
-			"type": "string",
-			"examples": [
 				"R",
 				"R-E",
 				"IR",
 				"IRN"
 			]
 		},
+		"number": {
+			"description": "The number of the train",
+			"type": "string",
+			"examples": [
+				"74",
+				"15934"
+			]
+		},
 		"date": {
-			"description": "Date of departure from the first station",
-			"type": "string"
+			"description": "Date of departure from the first station (dd.mm.yyyy)",
+			"type": "string",
+			"pattern": "^[0-9]{1,2}\\.[0-9]{2}\\.[0-9]{4}$"
 		},
 		"operator": {
 			"description": "Operator of the train",
