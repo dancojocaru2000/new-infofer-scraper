@@ -12,7 +12,7 @@ from .utils import *
 
 RO_LETTERS = r'A-Za-zăâîșțĂÂÎȚȘ'
 
-STATION_INFO_REGEX = re.compile(rf'^([{RO_LETTERS}. ]+) în ([0-9.]+)$')
+STATION_INFO_REGEX = re.compile(rf'^([{RO_LETTERS}.0-9 ]+) în ([0-9.]+)$')
 
 STOPPING_TIME_REGEX = re.compile(r'^(necunoscută \(stație terminus\))|(?:([0-9]+) (min|sec) \((?:începând cu|până la) ([0-9]{1,2}:[0-9]{2})\))$')
 
