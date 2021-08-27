@@ -46,6 +46,9 @@ def scrape(station_name: str):
 	tz = pytz.timezone('Europe/Bucharest')
 
 	def parse_arrdep_list(elem, end_station_field_name):
+		if elem.div.ul is None:
+			return None
+
 		def parse_item(elem):
 			result = {}
 

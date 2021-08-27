@@ -71,7 +71,7 @@
 	"type": "object",
 	"properties": {
 		"arrivals": {
-			"type": "array",
+			"type": ["array", "null"],
 			"items": {
 				"allOf": [
 					{
@@ -96,7 +96,7 @@
 			}
 		},
 		"departures": {
-			"type": "array",
+			"type": ["array", "null"],
 			"items": {
 				"allOf": [
 					{

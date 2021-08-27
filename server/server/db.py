@@ -165,7 +165,9 @@ def on_station(station_data: dict):
 				found_train_at_station(station, train_number)
 	
 	with db_transaction():
-		for train in station_data['arrivals']:
-			process_train(train)
-		for train in station_data['departures']:
-			process_train(train)
+		if station_data['arrivals']:
+			for train in station_data['arrivals']:
+				process_train(train)
+		if station_data['departures']:
+			for train in station_data['departures']:
+				process_train(train)
