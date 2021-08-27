@@ -43,6 +43,8 @@ def get_train_info(train_no: int):
 			if result['stations'][i]['departure']:
 				date = datetime.datetime.fromisoformat(result['stations'][i]['departure']['scheduleTime'])
 				result['stations'][i]['departure']['scheduleTime'] = f'{date.hour}:{date.minute:02}'
+			if 'stoppingTime' in result['stations'][i] and result['stations'][i]['stoppingTime']:
+				result['stations'][i]['stoppingTime'] //= 60
 
 		return result
 	if train_no not in train_data_cache:

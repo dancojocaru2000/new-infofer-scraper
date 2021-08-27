@@ -14,7 +14,7 @@ RO_LETTERS = r'A-Za-zăâîșțĂÂÎȚȘ'
 
 STATION_INFO_REGEX = re.compile(rf'^([{RO_LETTERS}. ]+) în ([0-9.]+)$')
 
-STOPPING_TIME_REGEX = re.compile(r'^(necunoscută \(stație terminus\))|(?:([0-9]+) min \((?:începând cu|până la) ([0-9]{1,2}:[0-9]{2})\))$')
+STOPPING_TIME_REGEX = re.compile(r'^(necunoscută \(stație terminus\))|(?:([0-9]+) (min|sec) \((?:începând cu|până la) ([0-9]{1,2}:[0-9]{2})\))$')
 
 # endregion
 
@@ -62,13 +62,14 @@ def scrape(station_name: str):
 			st_hr, st_min = (int(comp) for comp in result['time'].split(':'))
 			result['time'] = tz.localize(dt_seq(st_hr, st_min)).isoformat()
 
-			unknown_st, st, st_opposite_time = STOPPING_TIME_REGEX.match(
+			unknown_st, st, minsec, st_opposite_time = STOPPING_TIME_REGEX.match(
 				collapse_space(stopping_time_div.div('div', recursive=False)[1].text)
 			).groups()
 			if unknown_st:
 				result['stoppingTime'] = None
 			elif st:
-				result['stoppingTime'] = int(st)
+				minutes = minsec == 'min'
+				result['stoppingTime'] = int(st) * 60 if minutes else int(st)
 
 			result['train'] = {}
 			result['train']['rank'] = collapse_space(train_div.div.div('div', recursive=False)[1].span.text)

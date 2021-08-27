@@ -29,7 +29,7 @@ KM_REGEX = re.compile(r'^km ([0-9]+)$')
 
 PLATFORM_REGEX = re.compile(r'^linia (.+)$')
 
-STOPPING_TIME_REGEX = re.compile(r'^([0-9]+) min oprire$')
+STOPPING_TIME_REGEX = re.compile(r'^([0-9]+) (min|sec) oprire$')
 
 STATION_DEPARR_STATUS_REGEX = re.compile(r'^(?:(la timp)|(?:((?:\+|-)[0-9]+) min \((?:(?:întârziere)|(?:mai devreme))\)))(\*?)$')
 
@@ -106,7 +106,10 @@ def scrape(train_no: int, use_yesterday=False, date_override=None):
 		if not station_scraped['stoppingTime']:
 			station_scraped['stoppingTime'] = None
 		else:
-			station_scraped['stoppingTime'] = int(STOPPING_TIME_REGEX.match(station_scraped['stoppingTime']).groups()[0])
+			st_value, st_minsec = STOPPING_TIME_REGEX.match(station_scraped['stoppingTime']).groups()
+			station_scraped['stoppingTime'] = int(st_value)
+			if st_minsec == 'min':
+				station_scraped['stoppingTime'] *= 60
 		station_scraped['platform'] = collapse_space(middle.div.div('div', recursive=False)[0]('div', recursive=False)[3].text)
 		if not station_scraped['platform']:
 			station_scraped['platform'] = None

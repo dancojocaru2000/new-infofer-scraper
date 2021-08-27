@@ -113,7 +113,7 @@
 					"stoppingTime": {
 						"description": "The number of minutes the train is scheduled to stop in this station",
 						"type": ["integer", "null"],
-						"minimum": 1
+						"minimum": 0
 					},
 					"platform": {
 						"description": "The platform the train stopped at",
