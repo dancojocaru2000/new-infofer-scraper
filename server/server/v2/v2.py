@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 from flask import Blueprint, jsonify, request
 from flask.helpers import url_for
@@ -41,10 +42,16 @@ def get_train_info_schema():
 @bp.route('/train/<train_no>')
 def get_train_info(train_no: str):
 	use_yesterday = check_yes_no(request.args.get('use_yesterday', ''), default=False)
+	date_override = request.args.get('date', default=None)
+	try:
+		date_override = datetime.fromisoformat(date_override)
+	except ValueError:
+		date_override = None
+
 	@filtered_data
 	def get_data():
 		from ..scraper.scraper import scrape_train
-		result = scrape_train(train_no, use_yesterday=use_yesterday)
+		result = scrape_train(train_no, use_yesterday=use_yesterday, date_override=date_override)
 		db.on_train_data(result)
 		return result
 	if (train_no, use_yesterday) not in train_data_cache:
