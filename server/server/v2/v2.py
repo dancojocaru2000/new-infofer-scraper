@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 import json
 from flask import Blueprint, jsonify, request
 from flask.helpers import url_for
@@ -55,8 +55,8 @@ def get_train_info(train_no: str):
 		db.on_train_data(result)
 		return result
 	if (train_no, use_yesterday) not in train_data_cache:
-		train_data_cache[(train_no, use_yesterday)] = CachedData(get_data, validity=1000 * 30)
-	data, fetch_time = train_data_cache[(train_no, use_yesterday)]()
+		train_data_cache[(train_no, use_yesterday or date_override)] = CachedData(get_data, validity=1000 * 30)
+	data, fetch_time = train_data_cache[(train_no, use_yesterday or date_override)]()
 	data['$schema'] = get_hostname() + url_for('.get_train_info_schema')
 	validate(data, schema=TRAIN_INFO_SCHEMA['v2'])
 	resp = jsonify(data)
