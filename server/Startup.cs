@@ -48,13 +48,14 @@ namespace Server {
 
 			if (env.IsDevelopment()) {
 				app.UseDeveloperExceptionPage();
-				app.UseSwagger();
-				app.UseSwaggerUI(c => {
-					c.SwaggerEndpoint("/swagger/v3/swagger.json", "InfoTren Scraper v3");
-					c.SwaggerEndpoint("/swagger/v2/swagger.json", "InfoTren Scraper v2");
-					c.SwaggerEndpoint("/swagger/v1/swagger.json", "InfoTren Scraper v1");
-				});
 			}
+
+			app.UseSwagger();
+			app.UseSwaggerUI(c => {
+				c.SwaggerEndpoint("/swagger/v3/swagger.json", "InfoTren Scraper v3");
+				c.SwaggerEndpoint("/swagger/v2/swagger.json", "InfoTren Scraper v2");
+				c.SwaggerEndpoint("/swagger/v1/swagger.json", "InfoTren Scraper v1");
+			});
 
 			// app.UseHttpsRedirection();
 
