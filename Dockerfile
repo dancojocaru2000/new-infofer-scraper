@@ -1,23 +1,23 @@
-FROM python:slim
+# https://hub.docker.com/_/microsoft-dotnet
+FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
+WORKDIR /source
 
-RUN pip install pipenv
+# copy csproj and restore as distinct layers
+COPY *.sln .
+COPY server/*.csproj ./server/
+COPY scraper/*.csproj ./scraper/
+COPY ConsoleTest/*.csproj ./ConsoleTest/
+RUN dotnet restore
 
-WORKDIR /var/app/scraper
-COPY scraper/Pipfil* ./
-COPY scraper/setup.py ./
-WORKDIR /var/app/server
-COPY server/Pipfil* ./
-RUN pipenv install
-RUN pipenv graph
+# copy everything else and build app
+COPY server/. ./server/
+COPY scraper/. ./scraper/
+COPY ConsoleTest/. ./ConsoleTest/
+WORKDIR /source/server
+RUN dotnet publish -c release -o /app --no-restore
 
-WORKDIR /var/app/scraper
-COPY scraper .
-WORKDIR /var/app/server
-COPY server .
-RUN rm server/scraper
-RUN ln -s /var/app/scraper ./server/scraper
-
-ENV PORT 5000
-EXPOSE ${PORT}
-
-CMD ["pipenv", "run", "python3", "-m", "main"]
+# final stage/image
+FROM mcr.microsoft.com/dotnet/aspnet:6.0
+WORKDIR /app
+COPY --from=build /app ./
+ENTRYPOINT ["dotnet", "Server.dll"]

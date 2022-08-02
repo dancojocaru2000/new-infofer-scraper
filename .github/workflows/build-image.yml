@@ -19,5 +19,6 @@ jobs:
       - name: Publish
         uses: docker/build-push-action@v2
         with:
+          context: .
           tags: ${{ format('ghcr.io/{0}/new_infofer_scraper:latest', github.actor) }}
           push: true

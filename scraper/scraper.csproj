@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <Nullable>enable</Nullable>
+        <TargetFramework>net6.0</TargetFramework>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="AngleSharp" Version="0.16.0" />
+        <PackageReference Include="Flurl" Version="3.0.2" />
+        <PackageReference Include="Jetbrains.Annotations" Version="2021.2.0" />
+        <PackageReference Include="NodaTime" Version="3.0.5" />
+    </ItemGroup>
+
+</Project>

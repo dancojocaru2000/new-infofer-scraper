@@ -1,16 +1,8 @@
-# Docker
-.dockerignore
-Dockerfile
-
-# CPython compiler output
-__pycache__
-*.pyc
-
-# Python package stuff
-reqlib-metadata
-pyproject.toml
-*.egg-info
-
-# VS Code
-.vscode
-
+**/bin
+**/obj
+**/out
+**/.vscode
+**/.vs
+**/omnisharp.json
+.dotnet
+.Microsoft.DotNet.ImageBuilder
