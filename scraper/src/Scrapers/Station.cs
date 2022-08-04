@@ -89,9 +89,10 @@ namespace InfoferScraper.Scrapers {
 			).Groups as IEnumerable<Group>).Skip(1).Select(group => group.Value);
 
 			var (dateDay, (dateMonth, (dateYear, _))) = result.Date.Split('.').Select(int.Parse);
-			Utils.DateTimeSequencer dtSeq = new(dateYear, dateMonth, dateDay);
 
 			void ParseArrDepList(IElement element, Action<Action<StationArrDep>> adder) {
+				Utils.DateTimeSequencer dtSeq = new(dateYear, dateMonth, dateDay);
+
 				if (element.QuerySelector(":scope > div > ul") == null) return;
 
 				foreach (var trainElement in element.QuerySelectorAll(":scope > div > ul > li")) {
