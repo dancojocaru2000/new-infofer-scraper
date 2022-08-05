@@ -170,8 +170,16 @@ namespace InfoferScraper.Scrapers {
 								.Text()
 								.WithCollapsedSpaces()
 						).Groups as IEnumerable<Group>).Skip(1).Select(group => group.Value);
-						arrDep.ModifyableStatus.Real = string.IsNullOrEmpty(approx);
-						arrDep.ModifyableStatus.Delay = delayMin.Length == 0 ? 0 : int.Parse(delayMin);
+						if (delayMin is null && delayDiv.Text().WithCollapsedSpaces() == "anulat") {
+							arrDep.ModifyableStatus.Cancelled = true;
+						}
+						else if (delayMin is null) {
+							throw new Exception($"Unexpected delayDiv value: {delayDiv.Text().WithCollapsedSpaces()}");
+						}
+						else {
+							arrDep.ModifyableStatus.Real = string.IsNullOrEmpty(approx);
+							arrDep.ModifyableStatus.Delay = delayMin.Length == 0 ? 0 : int.Parse(delayMin);
+						}
 
 						if (statusDivComponents.Length < 2) return;
 

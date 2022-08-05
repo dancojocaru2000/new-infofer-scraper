@@ -38,6 +38,7 @@ namespace InfoferScraper.Models.Station {
 	public interface IStationStatus : IStatus {
 		new int Delay { get; }
 		new bool Real { get; }
+		public bool Cancelled { get; }
 		public string? Platform { get; }
 	}
 	
@@ -102,6 +103,7 @@ namespace InfoferScraper.Models.Station {
 	internal record StationStatus : IStationStatus {
 		public int Delay { get; internal set; }
 		public bool Real { get; internal set; }
+		public bool Cancelled { get; internal set; }
 		public string? Platform { get; internal set; }
 	}
 	
