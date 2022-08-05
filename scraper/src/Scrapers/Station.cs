@@ -26,6 +26,8 @@ namespace InfoferScraper.Scrapers {
 		);
 
 		private static readonly Regex PlatformRegex = new(@"^linia\s([A-Za-z0-9]+)$");
+
+		private static readonly Regex TrainUrlDateRegex = new(@"Date=([0-9]{2}).([0-9]{2}).([0-9]{4})");
 		
 		private static readonly DateTimeZone BucharestTz = DateTimeZoneProviders.Tzdb["Europe/Bucharest"];
 
@@ -140,6 +142,22 @@ namespace InfoferScraper.Scrapers {
 							.QuerySelector(":scope > a")!
 							.Text()
 							.WithCollapsedSpaces();
+						var trainUri = new Uri(
+							"http://localhost" + trainDiv
+								.QuerySelectorAll(":scope > div > div > div")[1]
+								.QuerySelector(":scope > a")!
+								.GetAttribute("href")!
+						);
+						var (trainDepDay, (trainDepMonth, (trainDepYear, _))) = TrainUrlDateRegex
+							.Match(trainUri.Query)
+							.Groups
+							.Values
+							.Skip(1)
+							.Select(g => int.Parse(g.Value));
+						arrDep.ModifyableTrain.DepartureDate = BucharestTz
+							.AtStartOfDay(new(trainDepYear, trainDepMonth, trainDepDay))
+							.ToDateTimeOffset()
+							.ToUniversalTime();
 						arrDep.ModifyableTrain.Terminus = destDiv
 							.QuerySelectorAll(":scope > div > div > div")[1]
 							.Text()

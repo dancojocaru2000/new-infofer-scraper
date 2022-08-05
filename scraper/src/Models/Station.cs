@@ -33,6 +33,7 @@ namespace InfoferScraper.Models.Station {
 		/// Arrivals -> Departure station; Departures -> Destination station
 		/// </summary>
 		public string Terminus { get; }
+		public DateTimeOffset DepartureDate { get; }
 	}
 
 	public interface IStationStatus : IStatus {
@@ -96,6 +97,7 @@ namespace InfoferScraper.Models.Station {
 		public string Rank { get; internal set; } = "";
 		public IReadOnlyList<string> Route => _modifyableRoute.AsReadOnly();
 		public string Terminus { get; internal set; } = "";
+		public DateTimeOffset DepartureDate { get; internal set; }
 
 		internal void AddRouteStation(string station) => _modifyableRoute.Add(station);
 	}
