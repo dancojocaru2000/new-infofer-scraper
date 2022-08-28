@@ -41,9 +41,9 @@ namespace InfoferScraper.Scrapers {
 			new(@"^(?:(la timp)|(?:((?:\+|-)[0-9]+) min \((?:(?:întârziere)|(?:mai devreme))\)))(\*?)$");
 
 		private static readonly Regex TrainNumberChangeNoteRegex = 
-			new(@"^Trenul își schimbă numărul în\s([A-Z]+)\s([0-9]+)$");
+			new(@"^Trenul își schimbă numărul în\s([A-Z-]+)\s([0-9]+)$");
 		private static readonly Regex DepartsAsNoteRegex = 
-			new(@"^Trenul pleacă cu numărul\s([A-Z]+)\s([0-9]+)\sîn\s([0-9]{2}).([0-9]{2}).([0-9]{4})$");
+			new(@"^Trenul pleacă cu numărul\s([A-Z-]+)\s([0-9]+)\sîn\s([0-9]{2}).([0-9]{2}).([0-9]{4})$");
 		private static readonly Regex ReceivingWagonsNoteRegex = 
 			new(@"^Trenul primește vagoane de la\s(.+)\.$");
 		private static readonly Regex DetachingWagonsNoteRegex = 
