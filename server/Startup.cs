@@ -8,6 +8,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
+using MongoDB.Bson.Serialization.Conventions;
+using Server.Models.Database;
 using Server.Services.Implementations;
 using Server.Services.Interfaces;
 
@@ -26,6 +28,10 @@ namespace Server {
 					options.KnownProxies.Add(Dns.GetHostAddresses("host.docker.internal")[0]);
 				});
 			}
+
+			services.Configure<MongoSettings>(Configuration.GetSection("TrainDataMongo"));
+			var conventionPack = new ConventionPack { new CamelCaseElementNameConvention() };
+			ConventionRegistry.Register("camelCase", conventionPack, _ => true);
 			services.AddSingleton<IDataManager, DataManager>();
 			services.AddSingleton<IDatabase, Database>();
 			services.AddSingleton<NodaTime.IDateTimeZoneProvider>(NodaTime.DateTimeZoneProviders.Tzdb);

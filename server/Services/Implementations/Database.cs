@@ -7,6 +7,11 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
+using MongoDB.Driver;
+using Server.Models.Database;
 
 namespace Server.Services.Implementations;
 
@@ -17,77 +22,47 @@ public class Database : Server.Services.Interfaces.IDatabase {
 
 	private ILogger<Database> Logger { get; }
 
-	private bool shouldCommitOnEveryChange = true;
-	private bool dbDataDirty = false;
-	private bool stationsDirty = false;
-	private bool trainsDirty = false;
+	public DbRecord DbData { get; private set; } = new(3);
 
-	public DbRecord DbData { get; private set; } = new(2);
-	private List<StationRecord> stations = new();
-	private List<TrainRecord> trains = new();
-
-	public IReadOnlyList<Server.Services.Interfaces.IStationRecord> Stations => stations;
-	public IReadOnlyList<Server.Services.Interfaces.ITrainRecord> Trains => trains;
+	public IReadOnlyList<StationListing> Stations => stationListingsCollection.FindSync(_ => true).ToList();
+	public IReadOnlyList<TrainListing> Trains => trainListingsCollection.FindSync(_ => true).ToList();
 
 	private static readonly string DbDir = Environment.GetEnvironmentVariable("DB_DIR") ?? Path.Join(Environment.CurrentDirectory, "db");
 	private static readonly string DbFile = Path.Join(DbDir, "db.json");
 	private static readonly string StationsFile = Path.Join(DbDir, "stations.json");
 	private static readonly string TrainsFile = Path.Join(DbDir, "trains.json");
 
-	public IDisposable MakeDbTransaction() {
-		shouldCommitOnEveryChange = false;
-		return new Server.Utils.ActionDisposable(() => {
-			if (dbDataDirty) File.WriteAllText(DbFile, JsonSerializer.Serialize(DbData, serializerOptions));
-			if (stationsDirty) {
-				stations.Sort((s1, s2) => s2.StoppedAtBy.Count.CompareTo(s1.StoppedAtBy.Count));
-				File.WriteAllText(StationsFile, JsonSerializer.Serialize(stations, serializerOptions));
-			}
-			if (trainsDirty) File.WriteAllText(TrainsFile, JsonSerializer.Serialize(trains, serializerOptions));
-			dbDataDirty = stationsDirty = trainsDirty = false;
-			shouldCommitOnEveryChange = true;
-		});
-	}
+	private readonly IMongoDatabase db;
+	private readonly IMongoCollection<DbRecord> dbRecordCollection;
+	private readonly IMongoCollection<TrainListing> trainListingsCollection;
+	private readonly IMongoCollection<StationListing> stationListingsCollection;
 
-	public Database(ILogger<Database> logger) {
+	public Database(ILogger<Database> logger, IOptions<MongoSettings> mongoSettings) {
 		Logger = logger;
 
-		if (!Directory.Exists(DbDir)) {
-			Logger.LogDebug("Creating directory: {DbDir}", DbDir);
-			Directory.CreateDirectory(DbDir);
-		}
+		MongoClient mongoClient = new(mongoSettings.Value.ConnectionString);
+		db = mongoClient.GetDatabase(mongoSettings.Value.DatabaseName) ?? throw new NullReferenceException("Unable to get Mongo database");
+		dbRecordCollection = db.GetCollection<DbRecord>("db");
+		trainListingsCollection = db.GetCollection<TrainListing>("trainListings");
+		stationListingsCollection = db.GetCollection<StationListing>("stationListings");
 
 		Migration();
-
-		if (File.Exists(DbFile)) {
-			DbData = JsonSerializer.Deserialize<DbRecord>(File.ReadAllText(DbFile), serializerOptions)!;
-		}
-		else {
-			File.WriteAllText(DbFile, JsonSerializer.Serialize(DbData, serializerOptions));
-		}
-
-		if (File.Exists(StationsFile)) {
-			stations = JsonSerializer.Deserialize<List<StationRecord>>(File.ReadAllText(StationsFile), serializerOptions)!;
-		}
-
-		if (File.Exists(TrainsFile)) {
-			trains = JsonSerializer.Deserialize<List<TrainRecord>>(File.ReadAllText(TrainsFile), serializerOptions)!;
-		}
 	}
 
 	private void Migration() {
-		if (!File.Exists(DbFile)) {
-// 			using var _ = Logger.BeginScope("Migrating DB version 1 -> 2");
+		if (!File.Exists(DbFile) && File.Exists(TrainsFile)) {
 			Logger.LogInformation("Migrating DB version 1 -> 2");
 			if (File.Exists(StationsFile)) {
 				Logger.LogDebug("Converting StationsFile");
 				var oldStations = JsonNode.Parse(File.ReadAllText(StationsFile));
+				List<StationListing> stations = new();
 				if (oldStations != null) {
 					Logger.LogDebug("Found {StationsCount} stations", oldStations.AsArray().Count);
 					foreach (var station in oldStations.AsArray()) {
 						if (station == null) continue;
 						station["stoppedAtBy"] = new JsonArray(station["stoppedAtBy"]!.AsArray().Select(num => (JsonNode)(num!).ToString()!).ToArray());
 					}
-					stations = JsonSerializer.Deserialize<List<StationRecord>>(oldStations, serializerOptions)!;
+					stations = oldStations.Deserialize<List<StationListing>>(serializerOptions)!;
 				}
 				Logger.LogDebug("Rewriting StationsFile");
 				File.WriteAllText(StationsFile, JsonSerializer.Serialize(stations, serializerOptions));
@@ -95,6 +70,7 @@ public class Database : Server.Services.Interfaces.IDatabase {
 			if (File.Exists(TrainsFile)) {
 				Logger.LogDebug("Converting TrainsFile");
 				var oldTrains = JsonNode.Parse(File.ReadAllText(TrainsFile));
+				List<TrainListing> trains = new();
 				if (oldTrains != null) {
 					Logger.LogDebug("Found {TrainsCount} trains", oldTrains.AsArray().Count);
 					foreach (var train in oldTrains.AsArray()) {
@@ -102,7 +78,7 @@ public class Database : Server.Services.Interfaces.IDatabase {
 						train["number"] = train["numberString"];
 						train.AsObject().Remove("numberString");
 					}
-					trains = JsonSerializer.Deserialize<List<TrainRecord>>(oldTrains, serializerOptions)!;
+					trains = oldTrains.Deserialize<List<TrainListing>>(serializerOptions)!;
 				}
 				Logger.LogDebug("Rewriting TrainsFile");
 				File.WriteAllText(TrainsFile, JsonSerializer.Serialize(trains, serializerOptions));
@@ -111,72 +87,101 @@ public class Database : Server.Services.Interfaces.IDatabase {
 			File.WriteAllText(DbFile, JsonSerializer.Serialize(DbData, serializerOptions));
 			Migration();
 		}
-		else {
+		else if (File.Exists(DbFile)) {
 			var oldDbData = JsonNode.Parse(File.ReadAllText(DbFile));
 			if (((int?)oldDbData?["version"]) == 2) {
-				Logger.LogInformation("DB Version: 2; noop");
+				Logger.LogInformation("Migrating DB version 2 -> 3 (transition from fs+JSON to MongoDB)");
+
+				if (File.Exists(StationsFile)) {
+					Logger.LogDebug("Converting StationsFile");
+					var stations = JsonSerializer.Deserialize<List<StationListing>>(File.ReadAllText(StationsFile));
+					stationListingsCollection.InsertMany(stations);
+					File.Delete(StationsFile);
+				}
+
+				if (File.Exists(TrainsFile)) {
+					Logger.LogDebug("Converting TrainsFile");
+					var trains = JsonSerializer.Deserialize<List<TrainListing>>(File.ReadAllText(TrainsFile));
+					trainListingsCollection.InsertMany(trains);
+					File.Delete(TrainsFile);
+				}
+				
+				File.Delete(DbFile);
+				try {
+					Directory.Delete(DbDir);
+				}
+				catch (Exception) {
+					// Deleting of the directory is optional; may not be allowed in Docker or similar
+				}
+
+				var x = dbRecordCollection.FindSync(_ => true).ToList()!;
+				if (x.Count != 0) {
+					Logger.LogWarning("db collection contained data when migrating to V3");
+					using (var _ = Logger.BeginScope("Already existing data:")) {
+						foreach (var dbRecord in x) {
+							Logger.LogInformation("Id: {Id}, Version: {Version}", dbRecord.Id, dbRecord.Version);
+						}
+					}
+					Logger.LogInformation("Backing up existing data");
+					var backupDbRecordCollection = db.GetCollection<DbRecord>("db-backup");
+					backupDbRecordCollection.InsertMany(x);
+					Logger.LogDebug("Removing existing data");
+					dbRecordCollection.DeleteMany(_ => true);
+				}
+				dbRecordCollection.InsertOne(new(3));
+				Migration();
 			}
 			else {
-				throw new Exception("Unexpected Database version");
+				throw new("Unexpected Database version, only DB Version 2 uses DbFile");
+			}
+		}
+		else {
+			var datas = dbRecordCollection.FindSync(_ => true).ToList();
+			if (datas.Count == 0) {
+				Logger.LogInformation("No db record found, new database");
+				dbRecordCollection.InsertOne(DbData);
+			}
+			else {
+				DbData = datas[0];
+			}
+			if (DbData.Version == 3) {
+				Logger.LogInformation("Using MongoDB Database Version 3; noop");
+			}
+			else {
+				throw new($"Unexpected Database version: {DbData.Version}");
 			}
 		}
 	}
 
 	public async Task<string> FoundTrain(string rank, string number, string company) {
-		number = string.Join("", number.TakeWhile(c => '0' <= c && c <= '9'));
-		if (!trains.Where(train => train.Number == number).Any()) {
+		number = string.Join("", number.TakeWhile(c => c is >= '0' and <= '9'));
+		if (!await (await trainListingsCollection.FindAsync(Builders<TrainListing>.Filter.Eq("number", number))).AnyAsync()) {
 			Logger.LogDebug("Found train {Rank} {Number} from {Company}", rank, number, company);
-			trains.Add(new(number, rank, company));
-			if (shouldCommitOnEveryChange) {
-				await File.WriteAllTextAsync(TrainsFile, JsonSerializer.Serialize(trains, serializerOptions));
-			}
-			else {
-				trainsDirty = true;
-			}
+			await trainListingsCollection.InsertOneAsync(new(number: number, rank: rank, company: company));
 		}
 		return number;
 	}
 
 	public async Task FoundStation(string name) {
-		if (!stations.Where(station => station.Name == name).Any()) {
+		if (!await (stationListingsCollection.Find(Builders<StationListing>.Filter.Eq("name", name))).AnyAsync()) {
 			Logger.LogDebug("Found station {StationName}", name);
-			stations.Add(new(name, new()));
-			if (shouldCommitOnEveryChange) {
-				await File.WriteAllTextAsync(StationsFile, JsonSerializer.Serialize(stations, serializerOptions));
-			}
-			else {
-				stationsDirty = true;
-			}
+			await stationListingsCollection.InsertOneAsync(new(name, new()));
 		}
 	}
 
 	public async Task FoundTrainAtStation(string stationName, string trainNumber) {
-		trainNumber = string.Join("", trainNumber.TakeWhile(c => '0' <= c && c <= '9'));
+		trainNumber = string.Join("", trainNumber.TakeWhile(c => c is >= '0' and <= '9'));
 		await FoundStation(stationName);
-		var dirty = false;
-		for (var i = 0; i < stations.Count; i++) {
-			if (stations[i].Name == stationName) {
-				if (!stations[i].StoppedAtBy.Contains(trainNumber)) {
-					Logger.LogDebug("Found train {TrainNumber} at station {StationName}", trainNumber, stationName);
-					stations[i].ActualStoppedAtBy.Add(trainNumber);
-					dirty = true;
-				}
-				break;
-			}
-		}
-		if (dirty) {
-			if (shouldCommitOnEveryChange) {
-				stations.Sort((s1, s2) => s2.StoppedAtBy.Count.CompareTo(s1.StoppedAtBy.Count));
-				await File.WriteAllTextAsync(StationsFile, JsonSerializer.Serialize(stations, serializerOptions));
-			}
-			else {
-				stationsDirty = true;
-			}
+		var updateResult = await stationListingsCollection.UpdateOneAsync(
+			Builders<StationListing>.Filter.Eq("name", stationName),
+			Builders<StationListing>.Update.AddToSet("stoppedAtBy", trainNumber)
+		);
+		if (updateResult.IsAcknowledged && updateResult.ModifiedCount > 0) {
+			Logger.LogDebug("Found train {TrainNumber} at station {StationName}", trainNumber, stationName);
 		}
 	}
 
 	public async Task OnTrainData(InfoferScraper.Models.Train.ITrainScrapeResult trainData) {
-		using var _ = MakeDbTransaction();
 		var trainNumber = await FoundTrain(trainData.Rank, trainData.Number, trainData.Operator);
 		foreach (var group in trainData.Groups) {
 			foreach (var station in group.Stations) {
@@ -199,8 +204,6 @@ public class Database : Server.Services.Interfaces.IDatabase {
 			}
 		}
 
-		using var _ = MakeDbTransaction();
-
 		if (stationData.Arrivals != null) {
 			foreach (var train in stationData.Arrivals) {
 				await ProcessTrain(train);
@@ -214,25 +217,12 @@ public class Database : Server.Services.Interfaces.IDatabase {
 	}
 }
 
-public record DbRecord(int Version);
-
-public record StationRecord : Server.Services.Interfaces.IStationRecord {
-	[JsonPropertyName("stoppedAtBy")]
-	public List<string> ActualStoppedAtBy { get; init; }
-
-	public string Name { get; init; }
-	[JsonIgnore]
-	public IReadOnlyList<string> StoppedAtBy => ActualStoppedAtBy;
-
-	public StationRecord() {
-		Name = "";
-		ActualStoppedAtBy = new();
-	}
-
-	public StationRecord(string name, List<string> stoppedAtBy) {
-		Name = name;
-		ActualStoppedAtBy = stoppedAtBy;
-	}
+public record DbRecord(
+	[property: BsonId]
+	[property: BsonRepresentation(BsonType.ObjectId)]
+	[property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	string? Id,
+	int Version
+) {
+	public DbRecord(int version) : this(null, version) { }
 }
-
-public record TrainRecord(string Number, string Rank, string Company) : Server.Services.Interfaces.ITrainRecord;

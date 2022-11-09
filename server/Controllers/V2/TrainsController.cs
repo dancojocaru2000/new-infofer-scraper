@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc;
+using Server.Models.Database;
 using Server.Services.Interfaces;
 
 namespace Server.Controllers.V2;
@@ -15,7 +16,7 @@ public class TrainsController : Controller {
 	}
 
 	[HttpGet("")]
-	public ActionResult<IEnumerable<ITrainRecord>> ListTrains() {
+	public ActionResult<IEnumerable<TrainListing>> ListTrains() {
 		return Ok(Database.Trains);
 	}
 }

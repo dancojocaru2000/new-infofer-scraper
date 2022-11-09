@@ -5,6 +5,7 @@ using InfoferScraper.Models.Train;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using scraper.Exceptions;
+using Server.Models.Database;
 using Server.Services.Interfaces;
 
 namespace Server.Controllers.V3;
@@ -22,7 +23,7 @@ public class TrainsController : Controller {
 	}
 
 	[HttpGet("")]
-	public ActionResult<IEnumerable<ITrainRecord>> ListTrains() {
+	public ActionResult<IEnumerable<TrainListing>> ListTrains() {
 		return Ok(Database.Trains);
 	}
 

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using InfoferScraper.Models.Station;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Server.Models.Database;
 using Server.Services.Interfaces;
 
 namespace Server.Controllers.V3;
@@ -21,7 +22,7 @@ public class StationsController : Controller {
 	}
 
 	[HttpGet("")]
-	public ActionResult<IEnumerable<IStationRecord>> ListStations() {
+	public ActionResult<IEnumerable<StationListing>> ListStations() {
 		return Ok(Database.Stations);
 	}
 
