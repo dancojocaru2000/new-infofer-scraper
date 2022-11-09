@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using InfoferScraper.Models.Station;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MongoDB.Bson;
@@ -40,7 +41,9 @@ public class Database : Server.Services.Interfaces.IDatabase {
 	public Database(ILogger<Database> logger, IOptions<MongoSettings> mongoSettings) {
 		Logger = logger;
 
-		MongoClient mongoClient = new(mongoSettings.Value.ConnectionString);
+		var settings = MongoClientSettings.FromConnectionString(mongoSettings.Value.ConnectionString);
+		settings.MaxConnectionPoolSize = 100000;
+		MongoClient mongoClient = new(settings);
 		db = mongoClient.GetDatabase(mongoSettings.Value.DatabaseName) ?? throw new NullReferenceException("Unable to get Mongo database");
 		dbRecordCollection = db.GetCollection<DbRecord>("db");
 		trainListingsCollection = db.GetCollection<TrainListing>("trainListings");
@@ -183,11 +186,13 @@ public class Database : Server.Services.Interfaces.IDatabase {
 
 	public async Task OnTrainData(InfoferScraper.Models.Train.ITrainScrapeResult trainData) {
 		var trainNumber = await FoundTrain(trainData.Rank, trainData.Number, trainData.Operator);
-		foreach (var group in trainData.Groups) {
-			foreach (var station in group.Stations) {
-				await FoundTrainAtStation(station.Name, trainNumber);
-			}
-		}
+		await Task.WhenAll(
+			trainData.Groups
+				.SelectMany(g => g.Stations)
+				.Select(trainStop => trainStop.Name)
+				.Distinct()
+				.Select(station => FoundTrainAtStation(station, trainNumber))
+		);
 	}
 
 	public async Task OnStationData(InfoferScraper.Models.Station.IStationScrapeResult stationData) {
@@ -198,22 +203,19 @@ public class Database : Server.Services.Interfaces.IDatabase {
 			trainNumber = await FoundTrain(train.Train.Rank, trainNumber, train.Train.Operator);
 			await FoundTrainAtStation(stationName, trainNumber);
 			if (train.Train.Route.Count != 0) {
-				foreach (var station in train.Train.Route) {
-					await FoundTrainAtStation(station, trainNumber);
-				}
+				await Task.WhenAll(train.Train.Route.Select(station => FoundTrainAtStation(station, trainNumber)));
 			}
 		}
 
+		List<IStationArrDep> arrdep = new();
 		if (stationData.Arrivals != null) {
-			foreach (var train in stationData.Arrivals) {
-				await ProcessTrain(train);
-			}
+			arrdep.AddRange(stationData.Arrivals);
 		}
 		if (stationData.Departures != null) {
-			foreach (var train in stationData.Departures) {
-				await ProcessTrain(train);
-			}
+			arrdep.AddRange(stationData.Departures);
 		}
+
+		await Task.WhenAll(arrdep.Select(ProcessTrain));
 	}
 }
 
