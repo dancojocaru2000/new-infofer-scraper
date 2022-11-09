@@ -25,7 +25,13 @@ public class Database : Server.Services.Interfaces.IDatabase {
 
 	public DbRecord DbData { get; private set; } = new(3);
 
-	public IReadOnlyList<StationListing> Stations => stationListingsCollection.FindSync(_ => true).ToList();
+	public IReadOnlyList<StationListing> Stations => stationListingsCollection
+		.Aggregate(PipelineDefinition<StationListing, StationListing>.Create(
+			"{ $addFields: { stoppedAtCount: { $size: \"$stoppedAtBy\" } } }",
+			"{ $sort: { stoppedAtCount: -1 } }",
+			"{ $unset: \"stoppedAtCount\" }"
+			))
+		.ToList();
 	public IReadOnlyList<TrainListing> Trains => trainListingsCollection.FindSync(_ => true).ToList();
 
 	private static readonly string DbDir = Environment.GetEnvironmentVariable("DB_DIR") ?? Path.Join(Environment.CurrentDirectory, "db");
