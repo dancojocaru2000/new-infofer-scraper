@@ -13,5 +13,6 @@ public record StationListing(
     string Name,
     List<string> StoppedAtBy
 ) {
+    public StationListing() : this(null, "", new()) { }
     public StationListing(string name, List<string> stoppedAtBy) : this(null, name, stoppedAtBy) { }
 }

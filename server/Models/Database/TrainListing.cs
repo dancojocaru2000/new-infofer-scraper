@@ -13,5 +13,6 @@ public record TrainListing(
     string Number,
     string Company
 ) {
+    public TrainListing() : this(null, "", "", "") { }
     public TrainListing(string rank, string number, string company) : this(null, rank, number, company) { }
 }
