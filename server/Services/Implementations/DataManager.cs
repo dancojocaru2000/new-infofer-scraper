@@ -24,7 +24,7 @@ namespace Server.Services.Implementations {
 
 				var station = await InfoferScraper.Scrapers.StationScraper.Scrape(stationName, zonedDate.ToDateTimeOffset());
 				if (station != null) {
-					await Database.OnStationData(station);
+					_ = Task.Run(async () => await Database.OnStationData(station));
 				}
 				return station;
 			}, TimeSpan.FromMinutes(1));
@@ -34,7 +34,7 @@ namespace Server.Services.Implementations {
 
 				var train = await InfoferScraper.Scrapers.TrainScraper.Scrape(trainNumber, zonedDate.ToDateTimeOffset());
 				if (train != null) {
-					await Database.OnTrainData(train);
+					_ = Task.Run(async () => await Database.OnTrainData(train));
 				}
 				return train;
 			}, TimeSpan.FromSeconds(30));
