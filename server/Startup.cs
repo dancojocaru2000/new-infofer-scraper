@@ -3,6 +3,7 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -61,6 +62,30 @@ namespace Server {
 				c.SwaggerEndpoint("/swagger/v3/swagger.json", "InfoTren Scraper v3");
 				c.SwaggerEndpoint("/swagger/v2/swagger.json", "InfoTren Scraper v2");
 				c.SwaggerEndpoint("/swagger/v1/swagger.json", "InfoTren Scraper v1");
+			});
+
+			app.MapWhen(x => x.Request.Path.StartsWithSegments("/rapidoc"), appBuilder => {
+				appBuilder.Run(async context => {
+					context.Response.ContentType = "text/html";
+					
+					await context.Response.WriteAsync(
+						"""
+						<!doctype html> <!-- Important: must specify -->
+						<html>
+						<head>
+						  <meta charset="utf-8"> <!-- Important: rapi-doc uses utf8 characters -->
+						  <script type="module" src="https://unpkg.com/rapidoc/dist/rapidoc-min.js"></script>
+						</head>
+						<body>
+						  <rapi-doc
+							spec-url="/swagger/v3/swagger.json"
+							theme = "dark"
+						  > </rapi-doc>
+						</body>
+						</html> 
+						"""
+					);
+				});
 			});
 
 			// app.UseHttpsRedirection();

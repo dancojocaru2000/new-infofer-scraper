@@ -1,5 +1,5 @@
 # https://hub.docker.com/_/microsoft-dotnet
-FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build
 WORKDIR /source
 
 # copy csproj and restore as distinct layers
@@ -14,10 +14,10 @@ COPY server/. ./server/
 COPY scraper/. ./scraper/
 COPY ConsoleTest/. ./ConsoleTest/
 WORKDIR /source/server
-RUN dotnet publish -c release -o /app --no-restore
+RUN dotnet publish -f net7.0 -c release -o /app --no-restore
 
 # final stage/image
-FROM mcr.microsoft.com/dotnet/aspnet:6.0
+FROM mcr.microsoft.com/dotnet/aspnet:7.0
 WORKDIR /app
 COPY --from=build /app ./
 ENV INSIDE_DOCKER=true

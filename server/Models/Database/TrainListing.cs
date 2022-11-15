@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
@@ -11,8 +12,10 @@ public record TrainListing(
     string? Id,
     string Rank,
     string Number,
-    string Company
+    string Company,
+    [property: BsonRepresentation(BsonType.ObjectId)]
+    string? LatestDescription
 ) {
-    public TrainListing() : this(null, "", "", "") { }
-    public TrainListing(string rank, string number, string company) : this(null, rank, number, company) { }
+    public TrainListing() : this(null, "", "", "", null) { }
+    public TrainListing(string rank, string number, string company) : this(null, rank, number, company, null) { }
 }

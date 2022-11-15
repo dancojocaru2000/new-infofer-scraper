@@ -47,6 +47,9 @@ public class Database : Server.Services.Interfaces.IDatabase {
 	private readonly IMongoCollection<StationListing> stationListingsCollection;
 	private readonly AsyncThrottle throttle;
 
+	private readonly Dictionary<string, string> trainObjectIds = new();
+	private readonly Dictionary<string, string> stationObjectIds = new();
+
 	public Database(ILogger<Database> logger, IOptions<MongoSettings> mongoSettings) {
 		Logger = logger;
 
@@ -169,14 +172,25 @@ public class Database : Server.Services.Interfaces.IDatabase {
 	private readonly SemaphoreSlim insertTrainLock = new (1, 1);
 	public async Task<string> FoundTrain(string rank, string number, string company) {
 		number = string.Join("", number.TakeWhile(c => c is >= '0' and <= '9'));
+		// If there is a matching ObjectId, then it's already in the database
+		if (trainObjectIds.ContainsKey(number)) return number;
 		await insertTrainLock.WaitAsync();
 		try {
-			if (!await (await throttle.MakeRequest(() =>
-					    trainListingsCollection.FindAsync(Builders<TrainListing>.Filter.Eq("number", number))))
-				    .AnyAsync()) {
+			var possibleTrains = await (await throttle.MakeRequest(() => trainListingsCollection.FindAsync(
+				Builders<TrainListing>.Filter.Eq("number", number)
+			))).ToListAsync();
+			if (possibleTrains.Count == 0) {
 				Logger.LogDebug("Found train {Rank} {Number} from {Company}", rank, number, company);
-				await throttle.MakeRequest(() =>
-					trainListingsCollection.InsertOneAsync(new(number: number, rank: rank, company: company)));
+				TrainListing listing = new(number: number, rank: rank, company: company);
+				await throttle.MakeRequest(() => trainListingsCollection.InsertOneAsync(listing));
+				if (listing.Id != null) {
+					trainObjectIds[number] = listing.Id;
+				}
+			}
+			else {
+				foreach (var possibleTrain in possibleTrains) {
+					trainObjectIds[possibleTrain.Number] = possibleTrain.Id!;
+				}
 			}
 		}
 		finally {
@@ -192,7 +206,11 @@ public class Database : Server.Services.Interfaces.IDatabase {
 		// if (!await throttle.MakeRequest(() => stationListingsCollection.Find(Builders<StationListing>.Filter.Eq("name", name)).AnyAsync())) {
 		// 	Logger.LogDebug("Found station {StationName}", name);
 		// 	await throttle.MakeRequest(() => stationListingsCollection.InsertOneAsync(new(name, new())));
+		
 		// }
+		// If there is a matching ObjectId, then it's already in the database
+		if (stationObjectIds.ContainsKey(name)) return;
+		
 		await insertStationLock.WaitAsync();
 		UpdateResult update;
 		try {
@@ -206,6 +224,9 @@ public class Database : Server.Services.Interfaces.IDatabase {
 					IsUpsert = true,
 				}
 			);
+			if (update.IsAcknowledged && update.ModifiedCount > 0) {
+				stationObjectIds[name] = update.UpsertedId.AsObjectId.ToString();
+			}
 		}
 		finally {
 			insertStationLock.Release();
@@ -217,27 +238,45 @@ public class Database : Server.Services.Interfaces.IDatabase {
 	}
 
 	public async Task FoundStations(IEnumerable<string> names) {
-		var enumerable = names as string[] ?? names.ToArray();
+		var unknownStations = names.ToList();
+		if (unknownStations.All(s => stationObjectIds.ContainsKey(s))) {
+			return;
+		}
+
+		unknownStations.RemoveAll(s => stationObjectIds.ContainsKey(s));
 		var existingStations = await (await stationListingsCollection.FindAsync(
-			Builders<StationListing>.Filter.StringIn("name", enumerable.Select((n) => new StringOrRegularExpression(n)))
+			Builders<StationListing>.Filter.StringIn("name", unknownStations.Select((n) => new StringOrRegularExpression(n)))
 		)).ToListAsync();
-		var notExistingStations = enumerable.Where((n) => !existingStations.Select((s) => s.Name).Contains(n)).ToList();
-		if (notExistingStations.Count == 0) return;
-		await stationListingsCollection.InsertManyAsync(
-			notExistingStations.Select(
-				(s) => new StationListing(s, new())
-			)
-		);
-		Logger.LogDebug("Found stations {StationNames}", notExistingStations);
+		foreach (var existingStation in existingStations) {
+			stationObjectIds[existingStation.Name] = existingStation.Id!;
+		}
+
+		unknownStations.RemoveAll(s => existingStations.Select(st => st.Name).Contains(s));
+		if (unknownStations.Count == 0) return;
+		var unknownStationListings = unknownStations.Select((s) => new StationListing(s, new())).ToList();
+		await stationListingsCollection.InsertManyAsync(unknownStationListings);
+		foreach (var listing in unknownStationListings) {
+			stationObjectIds[listing.Name] = listing.Id!;
+		}
+		Logger.LogDebug("Found stations {StationNames}", unknownStations);
 	}
 
 	public async Task FoundTrainAtStation(string stationName, string trainNumber) {
 		trainNumber = string.Join("", trainNumber.TakeWhile(c => c is >= '0' and <= '9'));
 		await FoundStation(stationName);
-		var updateResult = await throttle.MakeRequest(() => stationListingsCollection.UpdateOneAsync(
-			Builders<StationListing>.Filter.Eq("name", stationName),
-			Builders<StationListing>.Update.AddToSet("stoppedAtBy", trainNumber)
-		));
+		UpdateResult updateResult;
+		if (stationObjectIds.ContainsKey(stationName)) {
+			updateResult = await throttle.MakeRequest(() => stationListingsCollection.UpdateOneAsync(
+				Builders<StationListing>.Filter.Eq("_id", ObjectId.Parse(stationObjectIds[stationName])),
+				Builders<StationListing>.Update.AddToSet("stoppedAtBy", trainNumber)
+			));
+		}
+		else {
+			updateResult = await throttle.MakeRequest(() => stationListingsCollection.UpdateOneAsync(
+				Builders<StationListing>.Filter.Eq("name", stationName),
+				Builders<StationListing>.Update.AddToSet("stoppedAtBy", trainNumber)
+			));
+		}
 		if (updateResult.IsAcknowledged && updateResult.ModifiedCount > 0) {
 			Logger.LogDebug("Found train {TrainNumber} at station {StationName}", trainNumber, stationName);
 		}
@@ -247,10 +286,22 @@ public class Database : Server.Services.Interfaces.IDatabase {
 		trainNumber = string.Join("", trainNumber.TakeWhile(c => c is >= '0' and <= '9'));
 		var enumerable = stationNames as string[] ?? stationNames.ToArray();
 		await FoundStations(enumerable);
-		var updateResult = await throttle.MakeRequest(() => stationListingsCollection.UpdateManyAsync(
-			Builders<StationListing>.Filter.StringIn("name", enumerable.Select(sn => new StringOrRegularExpression(sn))),
-			Builders<StationListing>.Update.AddToSet("stoppedAtBy", trainNumber)
-		));
+		var objectIds = enumerable
+			.Select<string, ObjectId?>((stationName) => stationObjectIds.ContainsKey(stationName) ? ObjectId.Parse(stationObjectIds[stationName]) : null)
+			.ToList();
+		UpdateResult updateResult;
+		if (!objectIds.Any((id) => id is null)) {
+			updateResult = await throttle.MakeRequest(() => stationListingsCollection.UpdateManyAsync(
+				Builders<StationListing>.Filter.In("_id", objectIds),
+				Builders<StationListing>.Update.AddToSet("stoppedAtBy", trainNumber)
+			));
+		}
+		else {
+			updateResult = await throttle.MakeRequest(() => stationListingsCollection.UpdateManyAsync(
+				Builders<StationListing>.Filter.StringIn("name", enumerable.Select(sn => new StringOrRegularExpression(sn))),
+				Builders<StationListing>.Update.AddToSet("stoppedAtBy", trainNumber)
+			));
+		}
 		if (updateResult.IsAcknowledged && updateResult.ModifiedCount > 0) {
 			Logger.LogDebug("Found train {TrainNumber} at stations {StationNames}", trainNumber, stationNames);
 		}

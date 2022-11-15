@@ -1,22 +1,26 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using InfoferScraper.Models.Train;
 using InfoferScraper.Models.Station;
 using Server.Services.Interfaces;
 using Server.Utils;
 using InfoferScraper;
+using Microsoft.Extensions.Logging;
 
 namespace Server.Services.Implementations {
 	public class DataManager : IDataManager {
+		private ILogger<DataManager> Logger { get; }
 		private IDatabase Database { get; }
 
 		private NodaTime.IDateTimeZoneProvider TzProvider { get; }
 		private NodaTime.DateTimeZone CfrTimeZone => TzProvider["Europe/Bucharest"];
 
-		public DataManager(NodaTime.IDateTimeZoneProvider tzProvider, IDatabase database) {
+		public DataManager(NodaTime.IDateTimeZoneProvider tzProvider, IDatabase database, ILogger<DataManager> logger) {
 			this.TzProvider = tzProvider;
 			this.Database = database;
+			this.Logger = logger;
 
 			stationCache = new(async (t) => {
 				var (stationName, date) = t;
@@ -24,7 +28,12 @@ namespace Server.Services.Implementations {
 
 				var station = await InfoferScraper.Scrapers.StationScraper.Scrape(stationName, zonedDate.ToDateTimeOffset());
 				if (station != null) {
-					_ = Task.Run(async () => await Database.OnStationData(station));
+					_ = Task.Run(async () => {
+						var watch = Stopwatch.StartNew();
+						await Database.OnStationData(station);
+						var ms = watch.ElapsedMilliseconds;
+						Logger.LogInformation("OnStationData timing: {StationDataMs} ms", ms);
+					});
 				}
 				return station;
 			}, TimeSpan.FromMinutes(1));
@@ -34,7 +43,12 @@ namespace Server.Services.Implementations {
 
 				var train = await InfoferScraper.Scrapers.TrainScraper.Scrape(trainNumber, zonedDate.ToDateTimeOffset());
 				if (train != null) {
-					_ = Task.Run(async () => await Database.OnTrainData(train));
+					_ = Task.Run(async () => {
+						var watch = Stopwatch.StartNew();
+						await Database.OnTrainData(train);
+						var ms = watch.ElapsedMilliseconds;
+						Logger.LogInformation("OnTrainData timing: {StationDataMs} ms", ms);
+					});
 				}
 				return train;
 			}, TimeSpan.FromSeconds(30));
