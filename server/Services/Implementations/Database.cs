@@ -33,9 +33,10 @@ public class Database : Server.Services.Interfaces.IDatabase {
 			"{ $addFields: { stoppedAtCount: { $size: \"$stoppedAtBy\" } } }",
 			"{ $sort: { stoppedAtCount: -1 } }",
 			"{ $unset: \"stoppedAtCount\" }"
-			))
+		))
 		.ToList();
 	public IReadOnlyList<TrainListing> Trains => trainListingsCollection.FindSync(_ => true).ToList();
+	public IReadOnlyList<StationAlias> StationAliases => stationAliasCollection.FindSync(_ => true).ToList();
 
 	private static readonly string DbDir = Environment.GetEnvironmentVariable("DB_DIR") ?? Path.Join(Environment.CurrentDirectory, "db");
 	private static readonly string DbFile = Path.Join(DbDir, "db.json");
@@ -46,6 +47,7 @@ public class Database : Server.Services.Interfaces.IDatabase {
 	private readonly IMongoCollection<DbRecord> dbRecordCollection;
 	private readonly IMongoCollection<TrainListing> trainListingsCollection;
 	private readonly IMongoCollection<StationListing> stationListingsCollection;
+	private readonly IMongoCollection<StationAlias> stationAliasCollection;
 	private readonly AsyncThrottle throttle;
 
 	private readonly Dictionary<string, string> trainObjectIds = new();
@@ -62,8 +64,11 @@ public class Database : Server.Services.Interfaces.IDatabase {
 		dbRecordCollection = db.GetCollection<DbRecord>("db");
 		trainListingsCollection = db.GetCollection<TrainListing>("trainListings");
 		stationListingsCollection = db.GetCollection<StationListing>("stationListings");
+		stationAliasCollection = db.GetCollection<StationAlias>("stationAliases");
 
 		Migration();
+
+		Task.Run(async () => await Initialize());
 	}
 
 	private void Migration() {
@@ -170,6 +175,13 @@ public class Database : Server.Services.Interfaces.IDatabase {
 		}
 	}
 
+	private async Task Initialize() {
+		await foreach (var entry in await stationAliasCollection.FindAsync(_ => true)) {
+			if (entry?.ListingId is null) continue;
+			stationObjectIds.Add(entry.Name, entry.ListingId);
+		}
+	}
+	
 	private readonly SemaphoreSlim insertTrainLock = new (1, 1);
 	public async Task<string> FoundTrain(string rank, string number, string company) {
 		number = string.Join("", number.TakeWhile(c => c is >= '0' and <= '9'));
@@ -226,7 +238,16 @@ public class Database : Server.Services.Interfaces.IDatabase {
 				}
 			);
 			if (update.IsAcknowledged && update.ModifiedCount > 0) {
-				stationObjectIds[name] = update.UpsertedId.AsObjectId.ToString();
+				var listingId = update.UpsertedId.AsObjectId.ToString();
+				stationObjectIds[name] = listingId;
+				await stationAliasCollection.UpdateOneAsync(
+					Builders<StationAlias>.Filter.Eq("name", name),
+					Builders<StationAlias>.Update.Combine(
+						Builders<StationAlias>.Update.SetOnInsert("name", name),
+						Builders<StationAlias>.Update.SetOnInsert("listingId", listingId)
+					), 
+					new UpdateOptions { IsUpsert = true }
+				);
 			}
 		}
 		finally {
@@ -312,9 +333,9 @@ public class Database : Server.Services.Interfaces.IDatabase {
 		var trainNumber = await FoundTrain(trainData.Rank, trainData.Number, trainData.Operator);
 		await FoundTrainAtStations(
 			trainData.Groups
-			.SelectMany(g => g.Stations)
-			.Select(trainStop => trainStop.Name)
-			.Distinct(), 
+				.SelectMany(g => g.Stations)
+				.Select(trainStop => trainStop.Name)
+				.Distinct(), 
 			trainNumber
 		);
 	}
@@ -341,16 +362,16 @@ public class Database : Server.Services.Interfaces.IDatabase {
 		}
 	}
 
-    public async Task OnItineraries(IReadOnlyList<IItinerary> itineraries) {
-        foreach (var itinerary in itineraries) {
-            foreach (var train in itinerary.Trains) {
-                await FoundTrainAtStations(
-                    train.IntermediateStops.Concat(new[] { train.From, train.To }),
-                    train.TrainNumber
-                );
-            }
-        }
-    }
+	public async Task OnItineraries(IReadOnlyList<IItinerary> itineraries) {
+		foreach (var itinerary in itineraries) {
+			foreach (var train in itinerary.Trains) {
+				await FoundTrainAtStations(
+					train.IntermediateStops.Concat(new[] { train.From, train.To }),
+					train.TrainNumber
+				);
+			}
+		}
+	}
 }
 
 public record DbRecord(
