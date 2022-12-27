@@ -8,6 +8,7 @@ using Server.Services.Interfaces;
 using Server.Utils;
 using InfoferScraper;
 using Microsoft.Extensions.Logging;
+using scraper.Models.Itinerary;
 
 namespace Server.Services.Implementations {
 	public class DataManager : IDataManager {
@@ -52,10 +53,27 @@ namespace Server.Services.Implementations {
 				}
 				return train;
 			}, TimeSpan.FromSeconds(30));
+			itinerariesCache = new(async (t) => {
+				var (from, to, date) = t;
+				var zonedDate = new NodaTime.LocalDate(date.Year, date.Month, date.Day).AtStartOfDayInZone(CfrTimeZone);
+
+				var itineraries = await InfoferScraper.Scrapers.RouteScraper.Scrape(from, to, zonedDate.ToDateTimeOffset());
+				if (itineraries != null) {
+					_ = Task.Run(async () => {
+						var watch = Stopwatch.StartNew();
+						await Database.OnItineraries(itineraries);
+						var ms = watch.ElapsedMilliseconds;
+						Logger.LogInformation("OnItineraries timing: {StationDataMs} ms", ms);
+					});
+				}
+
+				return itineraries;
+			}, TimeSpan.FromMinutes(1));
 		}
 
 		private readonly AsyncCache<(string, DateOnly), IStationScrapeResult?> stationCache;
 		private readonly AsyncCache<(string, DateOnly), ITrainScrapeResult?> trainCache;
+		private readonly AsyncCache<(string, string, DateOnly), IReadOnlyList<IItinerary>?> itinerariesCache;
 
 		public Task<IStationScrapeResult?> FetchStation(string stationName, DateTimeOffset date) {
 			var cfrDateTime = new NodaTime.ZonedDateTime(NodaTime.Instant.FromDateTimeOffset(date), CfrTimeZone);
@@ -69,6 +87,13 @@ namespace Server.Services.Implementations {
 			var cfrDate = new DateOnly(cfrDateTime.Year, cfrDateTime.Month, cfrDateTime.Day);
 
 			return trainCache.GetItem((trainNumber, cfrDate));
+		}
+
+		public async Task<IReadOnlyList<IItinerary>?> FetchItineraries(string from, string to, DateTimeOffset? date = null) {
+			var cfrDateTime = new NodaTime.ZonedDateTime(NodaTime.Instant.FromDateTimeOffset(date ?? DateTimeOffset.Now), CfrTimeZone);
+			var cfrDate = new DateOnly(cfrDateTime.Year, cfrDateTime.Month, cfrDateTime.Day);
+
+			return await itinerariesCache.GetItem((from, to, cfrDate));
 		}
 	}
 }

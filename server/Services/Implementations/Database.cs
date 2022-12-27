@@ -13,6 +13,7 @@ using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 using MongoDB.Driver;
+using scraper.Models.Itinerary;
 using Server.Models.Database;
 using Server.Utils;
 
@@ -339,6 +340,17 @@ public class Database : Server.Services.Interfaces.IDatabase {
 			await ProcessTrain(train);
 		}
 	}
+
+    public async Task OnItineraries(IReadOnlyList<IItinerary> itineraries) {
+        foreach (var itinerary in itineraries) {
+            foreach (var train in itinerary.Trains) {
+                await FoundTrainAtStations(
+                    train.IntermediateStops.Concat(new[] { train.From, train.To }),
+                    train.TrainNumber
+                );
+            }
+        }
+    }
 }
 
 public record DbRecord(

@@ -187,6 +187,8 @@ public static class RouteScraper {
 					foreach (var div in leftSideDivs[2]
 						         .QuerySelectorAll(":scope > div")
 						         .Where((_, i) => i % 2 != 0)) {
+						var text = div.Text().WithCollapsedSpaces();
+						if (text == "Nu sunt stații intermediare.") continue;
 						train.AddIntermediateStop(div.Text().WithCollapsedSpaces());
 					}
                     
