@@ -105,7 +105,7 @@ public static class RouteScraper {
 			var itinerary = new Itinerary();
             
 			var cardDivs = itineraryLi.QuerySelectorAll(":scope > div > div > div > div");
-			var detailsDivs = cardDivs[3]
+			var detailsDivs = cardDivs.Last()
 				.QuerySelectorAll(":scope > div > div")[1]
 				.QuerySelectorAll(":scope > div");
 			var trainItineraryAndDetailsLis = detailsDivs[0]
