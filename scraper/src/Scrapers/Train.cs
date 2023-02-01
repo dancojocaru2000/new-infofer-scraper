@@ -153,6 +153,11 @@ namespace InfoferScraper.Scrapers {
 								.QuerySelectorAll(":scope > div")[0]
 								.Text()
 								.WithCollapsedSpaces();
+							stopDescription.LinkName = new Flurl.Url(stopDetails
+								.QuerySelectorAll(":scope > div")[0]
+								.QuerySelector(":scope a")
+								.Attributes["href"]
+								.Value).PathSegments.Last();
 							var scrapedKm = stopDetails
 								.QuerySelectorAll(":scope > div")[1]
 								.Text()

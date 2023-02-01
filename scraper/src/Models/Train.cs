@@ -44,6 +44,7 @@ namespace InfoferScraper.Models.Train {
 
 	public interface ITrainStopDescription {
 		public string Name { get; }
+		public string LinkName { get; }
 		public int Km { get; }
 
 		/// <summary>
@@ -170,6 +171,7 @@ namespace InfoferScraper.Models.Train {
 	internal record TrainStopDescription : ITrainStopDescription {
 		private List<ITrainStopNote> ModifyableNotes { get; } = new();
 		public string Name { get; set; } = "";
+		public string LinkName { get; set; } = "";
 		public int Km { get; set; }
 		public int? StoppingTime { get; set; }
 		public string? Platform { get; set; }
