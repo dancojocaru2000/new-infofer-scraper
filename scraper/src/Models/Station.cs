@@ -37,9 +37,6 @@ namespace InfoferScraper.Models.Station {
 	}
 
 	public interface IStationStatus : IStatus {
-		new int Delay { get; }
-		new bool Real { get; }
-		public bool Cancelled { get; }
 		public string? Platform { get; }
 	}
 	

@@ -201,7 +201,12 @@ namespace InfoferScraper.Scrapers {
 									statusElement.Text().WithCollapsedSpaces(replaceWith: " ")
 								).Groups as IEnumerable<Group>).Skip(1).Select(group => group.Value);
 								arrDep.MakeStatus(status => {
-									status.Delay = string.IsNullOrEmpty(onTime) ? int.Parse(delay) : 0;
+									if (string.IsNullOrEmpty(onTime) && delay == null) {
+										status.Cancelled = true;
+									}
+									else {
+										status.Delay = string.IsNullOrEmpty(onTime) ? int.Parse(delay) : 0;
+									}
 									status.Real = string.IsNullOrEmpty(approx);
 								});
 							}
