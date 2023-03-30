@@ -2,13 +2,13 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
-using InfoferScraper.Models.Train;
-using InfoferScraper.Models.Station;
-using Server.Services.Interfaces;
-using Server.Utils;
 using InfoferScraper;
+using InfoferScraper.Models.Station;
+using InfoferScraper.Models.Train;
 using Microsoft.Extensions.Logging;
 using scraper.Models.Itinerary;
+using Server.Services.Interfaces;
+using Server.Utils;
 
 namespace Server.Services.Implementations {
 	public class DataManager : IDataManager {
@@ -25,6 +25,7 @@ namespace Server.Services.Implementations {
 
 			stationCache = new(async (t) => {
 				var (stationName, date) = t;
+				Logger.LogDebug("Fetching station {StationName} for date {Date}", stationName, date);
 				var zonedDate = new NodaTime.LocalDate(date.Year, date.Month, date.Day).AtStartOfDayInZone(CfrTimeZone);
 
 				var station = await InfoferScraper.Scrapers.StationScraper.Scrape(stationName, zonedDate.ToDateTimeOffset());
@@ -40,6 +41,7 @@ namespace Server.Services.Implementations {
 			}, TimeSpan.FromMinutes(1));
 			trainCache = new(async (t) => {
 				var (trainNumber, date) = t;
+				Logger.LogDebug("Fetching train {TrainNumber} for date {Date}", trainNumber, date);
 				var zonedDate = new NodaTime.LocalDate(date.Year, date.Month, date.Day).AtStartOfDayInZone(CfrTimeZone);
 
 				var train = await InfoferScraper.Scrapers.TrainScraper.Scrape(trainNumber, zonedDate.ToDateTimeOffset());
@@ -55,6 +57,7 @@ namespace Server.Services.Implementations {
 			}, TimeSpan.FromSeconds(30));
 			itinerariesCache = new(async (t) => {
 				var (from, to, date) = t;
+				Logger.LogDebug("Fetching itinerary from {From} to {To} for date {Date}", from, to, date);
 				var zonedDate = new NodaTime.LocalDate(date.Year, date.Month, date.Day).AtStartOfDayInZone(CfrTimeZone);
 
 				var itineraries = await InfoferScraper.Scrapers.RouteScraper.Scrape(from, to, zonedDate.ToDateTimeOffset());

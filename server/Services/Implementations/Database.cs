@@ -57,10 +57,13 @@ public class Database : Server.Services.Interfaces.IDatabase {
 		Logger = logger;
 
 		var settings = MongoClientSettings.FromConnectionString(mongoSettings.Value.ConnectionString);
+		settings.ServerApi = new(ServerApiVersion.V1);
 		settings.MaxConnectionPoolSize = 10000;
 		MongoClient mongoClient = new(settings);
+		Logger.LogDebug("Created monogClient");
 		throttle = new(mongoClient.Settings.MaxConnectionPoolSize / 2);
 		db = mongoClient.GetDatabase(mongoSettings.Value.DatabaseName) ?? throw new NullReferenceException("Unable to get Mongo database");
+		Logger.LogDebug("Created db");
 		dbRecordCollection = db.GetCollection<DbRecord>("db");
 		trainListingsCollection = db.GetCollection<TrainListing>("trainListings");
 		stationListingsCollection = db.GetCollection<StationListing>("stationListings");
