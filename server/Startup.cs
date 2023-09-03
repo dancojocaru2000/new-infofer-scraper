@@ -1,6 +1,5 @@
 using System;
 using System.Net;
-using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -10,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
 using MongoDB.Bson.Serialization.Conventions;
+using Newtonsoft.Json.Serialization;
 using Server.Models.Database;
 using Server.Services.Implementations;
 using Server.Services.Interfaces;
@@ -37,8 +37,10 @@ namespace Server {
 			services.AddSingleton<IDatabase, Database>();
 			services.AddSingleton<NodaTime.IDateTimeZoneProvider>(NodaTime.DateTimeZoneProviders.Tzdb);
 			services.AddControllers()
-				.AddJsonOptions(options => {
-					options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+				.AddNewtonsoftJson(options => {
+					options.SerializerSettings.ContractResolver = new DefaultContractResolver {
+						NamingStrategy = new CamelCaseNamingStrategy(),
+					};
 				});
 			services.AddSwaggerGen(c => {
 				c.SwaggerDoc("v1", new OpenApiInfo { Title = "InfoTren Scraper", Version = "v1" });

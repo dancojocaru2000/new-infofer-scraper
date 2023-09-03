@@ -2,9 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using InfoferScraper.Models.Station;
@@ -13,6 +10,9 @@ using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 using MongoDB.Driver;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Serialization;
 using scraper.Models.Itinerary;
 using Server.Models.Database;
 using Server.Utils;
@@ -20,8 +20,10 @@ using Server.Utils;
 namespace Server.Services.Implementations;
 
 public class Database : Server.Services.Interfaces.IDatabase {
-	private static readonly JsonSerializerOptions serializerOptions = new() {
-		PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+	private static readonly JsonSerializerSettings jsonSerializerSettings = new() {
+		ContractResolver = new DefaultContractResolver {
+			NamingStrategy = new CamelCaseNamingStrategy(),
+		},
 	};
 
 	private ILogger<Database> Logger { get; }
@@ -79,54 +81,54 @@ public class Database : Server.Services.Interfaces.IDatabase {
 			Logger.LogInformation("Migrating DB version 1 -> 2");
 			if (File.Exists(StationsFile)) {
 				Logger.LogDebug("Converting StationsFile");
-				var oldStations = JsonNode.Parse(File.ReadAllText(StationsFile));
+				var oldStations = JToken.Parse(File.ReadAllText(StationsFile));
 				List<StationListing> stations = new();
 				if (oldStations != null) {
-					Logger.LogDebug("Found {StationsCount} stations", oldStations.AsArray().Count);
-					foreach (var station in oldStations.AsArray()) {
+					Logger.LogDebug("Found {StationsCount} stations", oldStations.Children().Count());
+					foreach (var station in oldStations.Children()) {
 						if (station == null) continue;
-						station["stoppedAtBy"] = new JsonArray(station["stoppedAtBy"]!.AsArray().Select(num => (JsonNode)(num!).ToString()!).ToArray());
+						station["stoppedAtBy"] = new JArray(station["stoppedAtBy"]!.Children().Select(num => (JToken)(num!).ToString()!).ToArray());
 					}
-					stations = oldStations.Deserialize<List<StationListing>>(serializerOptions)!;
+					stations = oldStations.ToObject<List<StationListing>>(JsonSerializer.Create(jsonSerializerSettings))!;
 				}
 				Logger.LogDebug("Rewriting StationsFile");
-				File.WriteAllText(StationsFile, JsonSerializer.Serialize(stations, serializerOptions));
+				File.WriteAllText(StationsFile, JsonConvert.SerializeObject(stations, jsonSerializerSettings));
 			}
 			if (File.Exists(TrainsFile)) {
 				Logger.LogDebug("Converting TrainsFile");
-				var oldTrains = JsonNode.Parse(File.ReadAllText(TrainsFile));
+				var oldTrains = JToken.Parse(File.ReadAllText(TrainsFile));
 				List<TrainListing> trains = new();
 				if (oldTrains != null) {
-					Logger.LogDebug("Found {TrainsCount} trains", oldTrains.AsArray().Count);
-					foreach (var train in oldTrains.AsArray()) {
+					Logger.LogDebug("Found {TrainsCount} trains", oldTrains.Children().Count());
+					foreach (var train in oldTrains.Children()) {
 						if (train == null) continue;
 						train["number"] = train["numberString"];
-						train.AsObject().Remove("numberString");
+						train["numberString"]?.Remove();
 					}
-					trains = oldTrains.Deserialize<List<TrainListing>>(serializerOptions)!;
+					trains = oldTrains.ToObject<List<TrainListing>>(JsonSerializer.Create(jsonSerializerSettings))!;
 				}
 				Logger.LogDebug("Rewriting TrainsFile");
-				File.WriteAllText(TrainsFile, JsonSerializer.Serialize(trains, serializerOptions));
+				File.WriteAllText(TrainsFile, JsonConvert.SerializeObject(trains, jsonSerializerSettings));
 			}
 			DbData = new(2);
-			File.WriteAllText(DbFile, JsonSerializer.Serialize(DbData, serializerOptions));
+			File.WriteAllText(DbFile, JsonConvert.SerializeObject(DbData, jsonSerializerSettings));
 			Migration();
 		}
 		else if (File.Exists(DbFile)) {
-			var oldDbData = JsonNode.Parse(File.ReadAllText(DbFile));
+			var oldDbData = JToken.Parse(File.ReadAllText(DbFile));
 			if (((int?)oldDbData?["version"]) == 2) {
 				Logger.LogInformation("Migrating DB version 2 -> 3 (transition from fs+JSON to MongoDB)");
 
 				if (File.Exists(StationsFile)) {
 					Logger.LogDebug("Converting StationsFile");
-					var stations = JsonSerializer.Deserialize<List<StationListing>>(File.ReadAllText(StationsFile));
+					var stations = JsonConvert.DeserializeObject<List<StationListing>>(File.ReadAllText(StationsFile));
 					stationListingsCollection.InsertMany(stations);
 					File.Delete(StationsFile);
 				}
 
 				if (File.Exists(TrainsFile)) {
 					Logger.LogDebug("Converting TrainsFile");
-					var trains = JsonSerializer.Deserialize<List<TrainListing>>(File.ReadAllText(TrainsFile));
+					var trains = JsonConvert.DeserializeObject<List<TrainListing>>(File.ReadAllText(TrainsFile));
 					trainListingsCollection.InsertMany(trains);
 					File.Delete(TrainsFile);
 				}
@@ -380,7 +382,7 @@ public class Database : Server.Services.Interfaces.IDatabase {
 public record DbRecord(
 	[property: BsonId]
 	[property: BsonRepresentation(BsonType.ObjectId)]
-	[property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [property: JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
 	string? Id,
 	int Version
 ) {

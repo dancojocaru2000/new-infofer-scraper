@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using InfoferScraper.Models.Status;
-using InfoferScraper.Models.Train.JsonConverters;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
+using Newtonsoft.Json.Serialization;
 
 namespace InfoferScraper.Models.Train {
 	#region Interfaces
@@ -89,14 +89,14 @@ namespace InfoferScraper.Models.Train {
 
 	#endregion
 
-	[JsonConverter(typeof(StatusKindConverter))]
+	[JsonConverter(typeof(StringEnumConverter), typeof(CamelCaseNamingStrategy))]
 	public enum StatusKind {
 		Passing,
 		Arrival,
 		Departure,
 	}
 
-	[JsonConverter(typeof(NoteKindConverter))]
+	[JsonConverter(typeof(StringEnumConverter), typeof(CamelCaseNamingStrategy))]
 	public enum NoteKind {
 		TrainNumberChange,
 		DetachingWagons,
@@ -239,78 +239,6 @@ namespace InfoferScraper.Models.Train {
 			Status.Status newStatus = new();
 			configurator(newStatus);
 			Status = newStatus;
-		}
-	}
-
-	#endregion
-
-	#region JSON Converters
-
-	namespace JsonConverters {
-		internal class StatusKindConverter : JsonConverterFactory {
-			public override bool CanConvert(Type typeToConvert) {
-				return typeToConvert == typeof(StatusKind);
-			}
-
-			public override JsonConverter? CreateConverter(Type typeToConvert, JsonSerializerOptions options) {
-				return new Converter();
-			}
-
-			private class Converter : JsonConverter<StatusKind> {
-				public override StatusKind Read(
-					ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options
-				) {
-					return reader.GetString() switch {
-						"arrival" => StatusKind.Arrival,
-						"departure" => StatusKind.Departure,
-						"passing" => StatusKind.Passing,
-						_ => throw new NotImplementedException()
-					};
-				}
-
-				public override void Write(Utf8JsonWriter writer, StatusKind value, JsonSerializerOptions options) {
-					writer.WriteStringValue(value switch {
-						StatusKind.Passing => "passing",
-						StatusKind.Arrival => "arrival",
-						StatusKind.Departure => "departure",
-						_ => throw new NotImplementedException()
-					});
-				}
-			}
-		}
-
-		internal class NoteKindConverter : JsonConverterFactory {
-			public override bool CanConvert(Type typeToConvert) {
-				return typeToConvert == typeof(NoteKind);
-			}
-
-			public override JsonConverter? CreateConverter(Type typeToConvert, JsonSerializerOptions options) {
-				return new Converter();
-			}
-
-			private class Converter : JsonConverter<NoteKind> {
-				public override NoteKind Read(
-					ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options
-				) {
-					return reader.GetString() switch {
-						"departsAs" => NoteKind.DepartsAs,
-						"trainNumberChange" => NoteKind.TrainNumberChange,
-						"receivingWagons" => NoteKind.ReceivingWagons,
-						"detachingWagons" => NoteKind.DetachingWagons,
-						_ => throw new NotImplementedException()
-					};
-				}
-
-				public override void Write(Utf8JsonWriter writer, NoteKind value, JsonSerializerOptions options) {
-					writer.WriteStringValue(value switch {
-						NoteKind.DepartsAs => "departsAs",
-						NoteKind.TrainNumberChange => "trainNumberChange",
-						NoteKind.DetachingWagons => "detachingWagons",
-						NoteKind.ReceivingWagons => "receivingWagons",
-						_ => throw new NotImplementedException()
-					});
-				}
-			}
 		}
 	}
 
