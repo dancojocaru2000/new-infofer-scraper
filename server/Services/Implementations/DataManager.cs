@@ -29,8 +29,9 @@ namespace Server.Services.Implementations {
 
 			HttpClientHandler httpClientHandler = new() {
 				UseProxy = proxySettings.Value.UseProxy,
-				Proxy = proxySettings.Value.UseProxy ? new WebProxy(proxySettings.Value.Url) : null,
-				DefaultProxyCredentials = string.IsNullOrEmpty(proxySettings.Value.Credentials?.Username) ? null : new NetworkCredential(proxySettings.Value.Credentials.Username, proxySettings.Value.Credentials.Password),
+				Proxy = proxySettings.Value.UseProxy ? new WebProxy(proxySettings.Value.Url) {
+					Credentials = string.IsNullOrEmpty(proxySettings.Value.Credentials?.Username) ? null : new NetworkCredential(proxySettings.Value.Credentials.Username, proxySettings.Value.Credentials.Password),
+				} : null,
 			};
 			InfoferScraper.Scrapers.StationScraper stationScraper = new(httpClientHandler);
 			InfoferScraper.Scrapers.TrainScraper trainScraper = new(httpClientHandler);
