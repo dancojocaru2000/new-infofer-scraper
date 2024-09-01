@@ -14,7 +14,7 @@ using NodaTime;
 using NodaTime.Extensions;
 
 namespace InfoferScraper.Scrapers {
-	public static class StationScraper {
+	public class StationScraper {
 		private static readonly Regex StationInfoRegex = new($@"^([{Utils.RoLetters}.0-9 ]+)\sîn\s([0-9.]+)$");
 
 		private static readonly Regex StoppingTimeRegex = new(
@@ -28,25 +28,36 @@ namespace InfoferScraper.Scrapers {
 		private static readonly Regex PlatformRegex = new(@"^linia\s([A-Za-z0-9]+)$");
 
 		private static readonly Regex TrainUrlDateRegex = new(@"Date=([0-9]{2}).([0-9]{2}).([0-9]{4})");
-		
+
 		private static readonly DateTimeZone BucharestTz = DateTimeZoneProviders.Tzdb["Europe/Bucharest"];
 
 		private const string BaseUrl = "https://mersultrenurilor.infofer.ro/ro-RO/";
 
-		private static readonly CookieContainer CookieContainer = new();
+		private readonly CookieContainer cookieContainer = new();
 
-		private static readonly HttpClient HttpClient = new(new HttpClientHandler {
-			CookieContainer = CookieContainer,
-			UseCookies = true,
-		}) {
-			BaseAddress = new Uri(BaseUrl),
-			DefaultRequestVersion = new Version(2, 0),
-		};
+		private readonly HttpClient httpClient;
 
-		public static async Task<IStationScrapeResult> Scrape(string stationName, DateTimeOffset? date = null) {
+		public StationScraper(HttpClientHandler? httpClientHandler = null) {
+			if (httpClientHandler == null) {
+				httpClientHandler = new HttpClientHandler {
+					CookieContainer = cookieContainer,
+					UseCookies = true,
+				};
+			}
+			else {
+				httpClientHandler.CookieContainer = cookieContainer;
+				httpClientHandler.UseCookies = true;
+			}
+			httpClient = new HttpClient(httpClientHandler) {
+				BaseAddress = new Uri(BaseUrl),
+				DefaultRequestVersion = new Version(2, 0),
+			};
+		}
+
+		public async Task<IStationScrapeResult> Scrape(string stationName, DateTimeOffset? date = null) {
 			var dateInstant = date?.ToInstant().InZone(BucharestTz);
 			date = dateInstant?.ToDateTimeOffset();
-			
+
 			stationName = stationName.RoLettersToEn();
 
 			var result = new StationScrapeResult();
@@ -59,7 +70,7 @@ namespace InfoferScraper.Scrapers {
 			if (date != null) {
 				firstUrl = firstUrl.SetQueryParam("Date", $"{date:d.MM.yyyy}");
 			}
-			var firstResponse = await HttpClient.GetStringAsync(firstUrl);
+			var firstResponse = await httpClient.GetStringAsync(firstUrl);
 			var firstDocument = await asContext.OpenAsync(req => req.Content(firstResponse));
 			var firstForm = firstDocument.GetElementById("form-search")!;
 
@@ -69,7 +80,7 @@ namespace InfoferScraper.Scrapers {
 				.ToDictionary(elem => elem.Name!, elem => elem.Value);
 
 			var secondUrl = "".AppendPathSegments("Stations", "StationsResult");
-			var secondResponse = await HttpClient.PostAsync(
+			var secondResponse = await httpClient.PostAsync(
 				secondUrl,
 #pragma warning disable CS8620
 				new FormUrlEncodedContent(firstResult)
@@ -167,9 +178,9 @@ namespace InfoferScraper.Scrapers {
 							.Text()
 							.WithCollapsedSpaces();
 						foreach (var station in routeDiv.QuerySelectorAll(":scope > div > div")[1]
-							.Text()
-							.WithCollapsedSpaces()
-							.Split(" - ")) {
+							         .Text()
+							         .WithCollapsedSpaces()
+							         .Split(" - ")) {
 							arrDep.ModifyableTrain.AddRouteStation(station);
 						}
 
@@ -182,7 +193,7 @@ namespace InfoferScraper.Scrapers {
 							.QuerySelectorAll(":scope > div");
 
 						var delayDiv = statusDivComponents[0];
-						
+
 						var (delayMin, (approx, _)) = (StatusRegex.Match(
 							delayDiv
 								.Text()

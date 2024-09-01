@@ -16,20 +16,10 @@ using scraper.Models.Itinerary;
 
 namespace InfoferScraper.Scrapers;
 
-public static class RouteScraper {
+public class RouteScraper {
 	private const string BaseUrl = "https://mersultrenurilor.infofer.ro/ro-RO/";
 	private static readonly DateTimeZone BucharestTz = DateTimeZoneProviders.Tzdb["Europe/Bucharest"];
 
-	private static readonly CookieContainer CookieContainer = new();
-
-	private static readonly HttpClient HttpClient = new(new HttpClientHandler {
-		CookieContainer = CookieContainer,
-		UseCookies = true,
-	}) {
-		BaseAddress = new Uri(BaseUrl),
-		DefaultRequestVersion = new Version(2, 0),
-	};
-	
 	private static readonly Regex KmTrainRankNoRegex = new(@"^([0-9]+)\skm\scu\s([A-Z-]+)\s([0-9]+)$");
 	private static readonly Regex OperatorRegex = new(@$"^Operat\sde\s([{Utils.RoLetters}\s]+)$");
 	private static readonly Regex DepArrRegex = new(@"^(Ple|Sos)\s([0-9]+)\s([a-z]+)\.?\s([0-9]+):([0-9]+)$");
@@ -49,7 +39,28 @@ public static class RouteScraper {
 		["dec"] = 12,
 	};
 
-	public static async Task<List<IItinerary>?> Scrape(string from, string to, DateTimeOffset? dateOverride = null) {
+	private readonly CookieContainer cookieContainer = new();
+
+	private readonly HttpClient httpClient;
+
+	public RouteScraper(HttpClientHandler? httpClientHandler = null) {
+		if (httpClientHandler == null) {
+			httpClientHandler = new HttpClientHandler {
+				CookieContainer = cookieContainer,
+				UseCookies = true,
+			};
+		}
+		else {
+			httpClientHandler.CookieContainer = cookieContainer;
+			httpClientHandler.UseCookies = true;
+		}
+		httpClient = new HttpClient(httpClientHandler) {
+			BaseAddress = new Uri(BaseUrl),
+			DefaultRequestVersion = new Version(2, 0),
+		};
+	}
+
+	public async Task<List<IItinerary>?> Scrape(string from, string to, DateTimeOffset? dateOverride = null) {
 		var dateOverrideInstant = dateOverride?.ToInstant().InZone(BucharestTz);
 		dateOverride = dateOverrideInstant?.ToDateTimeOffset();
 		TrainScrapeResult result = new();
@@ -70,7 +81,7 @@ public static class RouteScraper {
 		firstUrl = firstUrl.SetQueryParam("BetweenTrainsMinimumMinutes", "5");
 		firstUrl = firstUrl.SetQueryParam("ChangeStationName", "");
 
-		var firstResponse = await HttpClient.GetStringAsync(firstUrl);
+		var firstResponse = await httpClient.GetStringAsync(firstUrl);
 		var firstDocument = await asContext.OpenAsync(req => req.Content(firstResponse));
 		var firstForm = firstDocument.GetElementById("form-search")!;
 
@@ -80,7 +91,7 @@ public static class RouteScraper {
 			.ToDictionary(elem => elem.Name!, elem => elem.Value);
 
 		var secondUrl = "".AppendPathSegments("Itineraries", "GetItineraries");
-		var secondResponse = await HttpClient.PostAsync(
+		var secondResponse = await httpClient.PostAsync(
 			secondUrl,
 #pragma warning disable CS8620
 			new FormUrlEncodedContent(firstResult)
@@ -90,10 +101,10 @@ public static class RouteScraper {
 		var secondDocument = await asContext.OpenAsync(
 			req => req.Content(secondResponseContent)
 		);
-        
+
 		var (itineraryInfoDiv, _) = secondDocument
 			.QuerySelectorAll("body > div");
-        
+
 		if (itineraryInfoDiv == null) {
 			return null;
 		}
@@ -103,7 +114,7 @@ public static class RouteScraper {
 		var itineraries = new List<IItinerary>();
 		foreach (var itineraryLi in itinerariesLi) {
 			var itinerary = new Itinerary();
-            
+
 			var cardDivs = itineraryLi.QuerySelectorAll(":scope > div > div > div > div");
 			var detailsDivs = cardDivs.Last()
 				.QuerySelectorAll(":scope > div > div")[1]
@@ -127,7 +138,7 @@ public static class RouteScraper {
 					// Detail
 					var detailColumns = li.QuerySelectorAll(":scope > div > div");
 					var leftSideDivs = detailColumns[0].QuerySelectorAll(":scope > div");
-					
+
 					var departureDateText = leftSideDivs[0]
 						.QuerySelectorAll(":scope > div")[1]
 						.Text()
@@ -144,7 +155,7 @@ public static class RouteScraper {
 					if (departureDate < now.PlusDays(-1)) {
 						departureDate = departureDate.PlusYears(1);
 					}
-					
+
 					var arrivalDateText = leftSideDivs[3]
 						.QuerySelectorAll(":scope > div")[1]
 						.Text()
@@ -168,7 +179,7 @@ public static class RouteScraper {
 						.Text()
 						.WithCollapsedSpaces();
 					var kmRankNumberMatch = KmTrainRankNoRegex.Match(kmRankNumberText);
-					
+
 					var operatorText = rightSideDivs[0]
 						.QuerySelectorAll(":scope > div > div")[1]
 						.Text()
@@ -191,7 +202,7 @@ public static class RouteScraper {
 						if (text == "Nu sunt stații intermediare.") continue;
 						train.AddIntermediateStop(div.Text().WithCollapsedSpaces());
 					}
-                    
+
 					details.Add(train);
 				}
 			}
@@ -200,7 +211,7 @@ public static class RouteScraper {
 				detail.To = iTo;
 				itinerary.AddTrain(detail);
 			}
-			
+
 			itineraries.Add(itinerary);
 		}
 

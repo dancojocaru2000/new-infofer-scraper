@@ -15,7 +15,7 @@ using NodaTime.Extensions;
 using scraper.Exceptions;
 
 namespace InfoferScraper.Scrapers {
-	public static class TrainScraper {
+	public class TrainScraper {
 		private const string BaseUrl = "https://mersultrenurilor.infofer.ro/ro-RO/";
 		private static readonly Regex TrainInfoRegex = new(@"^([A-Z-]+)\s([0-9]+)\sîn\s([0-9.]+)$");
 		private static readonly Regex OperatorRegex = new(@"^Operat\sde\s(.+)$");
@@ -51,16 +51,28 @@ namespace InfoferScraper.Scrapers {
 
 		private static readonly DateTimeZone BucharestTz = DateTimeZoneProviders.Tzdb["Europe/Bucharest"];
 
-		private static readonly CookieContainer CookieContainer = new();
-		private static readonly HttpClient HttpClient = new(new HttpClientHandler {
-			CookieContainer = CookieContainer,
-			UseCookies = true,
-		}) {
-			BaseAddress = new Uri(BaseUrl),
-			DefaultRequestVersion = new Version(2, 0),
-		};
+		private readonly CookieContainer cookieContainer = new();
+		private readonly HttpClient httpClient; 
 
-		public static async Task<ITrainScrapeResult?> Scrape(string trainNumber, DateTimeOffset? dateOverride = null) {
+		public TrainScraper(HttpClientHandler? httpClientHandler = null)
+		{
+			if (httpClientHandler == null) {
+				httpClientHandler = new HttpClientHandler {
+					CookieContainer = cookieContainer,
+					UseCookies = true,
+				};
+			}
+			else {
+				httpClientHandler.CookieContainer = cookieContainer;
+				httpClientHandler.UseCookies = true;
+			}
+			httpClient = new HttpClient(httpClientHandler) {
+				BaseAddress = new Uri(BaseUrl),
+				DefaultRequestVersion = new Version(2, 0),
+			};
+		}
+
+		public async Task<ITrainScrapeResult?> Scrape(string trainNumber, DateTimeOffset? dateOverride = null) {
 			var dateOverrideInstant = dateOverride?.ToInstant().InZone(BucharestTz);
 			dateOverride = dateOverrideInstant?.ToDateTimeOffset();
 			TrainScrapeResult result = new();
@@ -73,7 +85,7 @@ namespace InfoferScraper.Scrapers {
 			if (dateOverride != null) {
 				firstUrl = firstUrl.SetQueryParam("Date", $"{dateOverride:d.MM.yyyy}");
 			}
-			var firstResponse = await HttpClient.GetStringAsync(firstUrl);
+			var firstResponse = await httpClient.GetStringAsync(firstUrl);
 			var firstDocument = await asContext.OpenAsync(req => req.Content(firstResponse));
 			var firstForm = firstDocument.GetElementById("form-search")!;
 
@@ -83,7 +95,7 @@ namespace InfoferScraper.Scrapers {
 				.ToDictionary(elem => elem.Name!, elem => elem.Value);
 
 			var secondUrl = "".AppendPathSegments("Trains", "TrainsResult");
-			var secondResponse = await HttpClient.PostAsync(
+			var secondResponse = await httpClient.PostAsync(
 				secondUrl,
 #pragma warning disable CS8620
 				new FormUrlEncodedContent(firstResult)

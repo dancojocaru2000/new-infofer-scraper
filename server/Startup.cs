@@ -10,6 +10,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
 using MongoDB.Bson.Serialization.Conventions;
 using Newtonsoft.Json.Serialization;
+using Server.Models;
 using Server.Models.Database;
 using Server.Services.Implementations;
 using Server.Services.Interfaces;
@@ -30,12 +31,14 @@ namespace Server {
 				});
 			}
 
+			services.Configure<ProxySettings>(Configuration.GetSection("Proxy"));
 			services.Configure<MongoSettings>(Configuration.GetSection("TrainDataMongo"));
 			var conventionPack = new ConventionPack { new CamelCaseElementNameConvention() };
 			ConventionRegistry.Register("camelCase", conventionPack, _ => true);
 			services.AddSingleton<IDataManager, DataManager>();
 			services.AddSingleton<IDatabase, Database>();
-			services.AddSingleton<NodaTime.IDateTimeZoneProvider>(NodaTime.DateTimeZoneProviders.Tzdb);
+			services.AddSingleton(NodaTime.DateTimeZoneProviders.Tzdb);
+
 			services.AddControllers()
 				.AddNewtonsoftJson(options => {
 					options.SerializerSettings.ContractResolver = new DefaultContractResolver {

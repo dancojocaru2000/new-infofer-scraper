@@ -40,7 +40,7 @@ async Task PrintTrain() {
 	
 	Console.WriteLine(
 		JsonSerializer.Serialize(
-			await TrainScraper.Scrape(trainNumber),
+			await new TrainScraper().Scrape(trainNumber),
 			new JsonSerializerOptions {
 				PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
 				WriteIndented = true,
@@ -58,7 +58,7 @@ async Task PrintStation() {
 	
 	Console.WriteLine(
 		JsonSerializer.Serialize(
-			await StationScraper.Scrape(stationName),
+			await new StationScraper().Scrape(stationName),
 			new JsonSerializerOptions {
 				PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
 				WriteIndented = true,
@@ -74,7 +74,7 @@ async Task ScrapeItineraries() {
 
 	if (from == null || to == null) return;
 
-	var data = await RouteScraper.Scrape(from, to);
+	var data = await new RouteScraper().Scrape(from, to);
     
 	Console.WriteLine($"{data.Count} itineraries:");
 	Console.WriteLine();

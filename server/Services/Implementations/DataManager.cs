@@ -1,12 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Net;
+using System.Net.Http;
 using System.Threading.Tasks;
 using InfoferScraper;
 using InfoferScraper.Models.Station;
 using InfoferScraper.Models.Train;
 using Microsoft.Extensions.Logging;
 using scraper.Models.Itinerary;
+using Server.Models;
 using Server.Services.Interfaces;
 using Server.Utils;
 
@@ -18,17 +21,26 @@ namespace Server.Services.Implementations {
 		private NodaTime.IDateTimeZoneProvider TzProvider { get; }
 		private NodaTime.DateTimeZone CfrTimeZone => TzProvider["Europe/Bucharest"];
 
-		public DataManager(NodaTime.IDateTimeZoneProvider tzProvider, IDatabase database, ILogger<DataManager> logger) {
+		public DataManager(NodaTime.IDateTimeZoneProvider tzProvider, IDatabase database, ILogger<DataManager> logger, ProxySettings? proxySettings) {
 			this.TzProvider = tzProvider;
 			this.Database = database;
 			this.Logger = logger;
+
+			HttpClientHandler httpClientHandler = new (){
+				UseProxy = proxySettings != null,
+				Proxy = proxySettings == null ? null : new WebProxy(proxySettings.Url),
+				DefaultProxyCredentials = proxySettings?.Credentials == null ? null : new NetworkCredential(proxySettings.Credentials.Username, proxySettings.Credentials.Password),
+			};
+			InfoferScraper.Scrapers.StationScraper stationScraper = new(httpClientHandler);
+			InfoferScraper.Scrapers.TrainScraper trainScraper = new(httpClientHandler);
+			InfoferScraper.Scrapers.RouteScraper routeScraper = new(httpClientHandler);
 
 			stationCache = new(async (t) => {
 				var (stationName, date) = t;
 				Logger.LogDebug("Fetching station {StationName} for date {Date}", stationName, date);
 				var zonedDate = new NodaTime.LocalDate(date.Year, date.Month, date.Day).AtStartOfDayInZone(CfrTimeZone);
 
-				var station = await InfoferScraper.Scrapers.StationScraper.Scrape(stationName, zonedDate.ToDateTimeOffset());
+				var station = await stationScraper.Scrape(stationName, zonedDate.ToDateTimeOffset());
 				if (station != null) {
 					_ = Task.Run(async () => {
 						var watch = Stopwatch.StartNew();
@@ -44,7 +56,7 @@ namespace Server.Services.Implementations {
 				Logger.LogDebug("Fetching train {TrainNumber} for date {Date}", trainNumber, date);
 				var zonedDate = new NodaTime.LocalDate(date.Year, date.Month, date.Day).AtStartOfDayInZone(CfrTimeZone);
 
-				var train = await InfoferScraper.Scrapers.TrainScraper.Scrape(trainNumber, zonedDate.ToDateTimeOffset());
+				var train = await trainScraper.Scrape(trainNumber, zonedDate.ToDateTimeOffset());
 				if (train != null) {
 					_ = Task.Run(async () => {
 						var watch = Stopwatch.StartNew();
@@ -60,7 +72,7 @@ namespace Server.Services.Implementations {
 				Logger.LogDebug("Fetching itinerary from {From} to {To} for date {Date}", from, to, date);
 				var zonedDate = new NodaTime.LocalDate(date.Year, date.Month, date.Day).AtStartOfDayInZone(CfrTimeZone);
 
-				var itineraries = await InfoferScraper.Scrapers.RouteScraper.Scrape(from, to, zonedDate.ToDateTimeOffset());
+				var itineraries = await routeScraper.Scrape(from, to, zonedDate.ToDateTimeOffset());
 				if (itineraries != null) {
 					_ = Task.Run(async () => {
 						var watch = Stopwatch.StartNew();
