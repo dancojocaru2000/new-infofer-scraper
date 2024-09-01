@@ -8,6 +8,7 @@ using InfoferScraper;
 using InfoferScraper.Models.Station;
 using InfoferScraper.Models.Train;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using scraper.Models.Itinerary;
 using Server.Models;
 using Server.Services.Interfaces;
@@ -21,15 +22,15 @@ namespace Server.Services.Implementations {
 		private NodaTime.IDateTimeZoneProvider TzProvider { get; }
 		private NodaTime.DateTimeZone CfrTimeZone => TzProvider["Europe/Bucharest"];
 
-		public DataManager(NodaTime.IDateTimeZoneProvider tzProvider, IDatabase database, ILogger<DataManager> logger, ProxySettings? proxySettings) {
+		public DataManager(NodaTime.IDateTimeZoneProvider tzProvider, IDatabase database, ILogger<DataManager> logger, IOptions<ProxySettings> proxySettings) {
 			this.TzProvider = tzProvider;
 			this.Database = database;
 			this.Logger = logger;
 
-			HttpClientHandler httpClientHandler = new (){
-				UseProxy = proxySettings != null,
-				Proxy = proxySettings == null ? null : new WebProxy(proxySettings.Url),
-				DefaultProxyCredentials = proxySettings?.Credentials == null ? null : new NetworkCredential(proxySettings.Credentials.Username, proxySettings.Credentials.Password),
+			HttpClientHandler httpClientHandler = new() {
+				UseProxy = proxySettings.Value.UseProxy,
+				Proxy = proxySettings.Value.UseProxy ? new WebProxy(proxySettings.Value.Url) : null,
+				DefaultProxyCredentials = string.IsNullOrEmpty(proxySettings.Value.Credentials?.Username) ? null : new NetworkCredential(proxySettings.Value.Credentials.Username, proxySettings.Value.Credentials.Password),
 			};
 			InfoferScraper.Scrapers.StationScraper stationScraper = new(httpClientHandler);
 			InfoferScraper.Scrapers.TrainScraper trainScraper = new(httpClientHandler);

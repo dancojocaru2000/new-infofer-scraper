@@ -1,7 +1,7 @@
 namespace Server.Models;
 
-public record ProxySettings(string Url, ProxyCredentials? Credentials = null) {
-	public ProxySettings() : this("") { }
+public record ProxySettings(bool UseProxy, string Url, ProxyCredentials? Credentials = null) {
+	public ProxySettings() : this(false, "") { }
 }
 
 public record ProxyCredentials(string Username, string Password) {
