@@ -26,7 +26,7 @@ namespace InfoferScraper.Scrapers {
 
 		private static readonly Regex SlRegex =
 			new(
-				@"^(?:Fără|([0-9]+)\smin)\s(întârziere|mai\sdevreme)\sla\s(trecerea\sfără\soprire\sprin|sosirea\sîn|plecarea\sdin)\s(.+)\.$");
+				@"^(?:Fără|([0-9]+)\smin)\s(întârziere|mai\sdevreme)\sla\s(trecerea\sfără\soprire\sprin|sosirea\sîn|plecarea\sdin)\s(.+)(?:\s\(Raportat\sla\s([0-9]+):([0-9]+)\))?\.");
 
 		private static readonly Dictionary<char, StatusKind> SlStateMap = new() {
 			{ 't', StatusKind.Passing },
