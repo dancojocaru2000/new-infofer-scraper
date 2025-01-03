@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using AngleSharp;
@@ -57,6 +58,12 @@ public class RouteScraper {
 		httpClient = new HttpClient(httpClientHandler) {
 			BaseAddress = new Uri(BaseUrl),
 			DefaultRequestVersion = new Version(2, 0),
+				DefaultRequestHeaders = {
+					UserAgent = {
+						new ProductInfoHeaderValue("new-infofer-scraper", "0.0.1"),
+						new ProductInfoHeaderValue("(developed by DC Dev as a hobby, get in touch at webmaster<at>dcdev.ro for any issues)"),
+					},
+				},
 		};
 	}
 
