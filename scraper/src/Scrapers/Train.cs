@@ -72,8 +72,8 @@ namespace InfoferScraper.Scrapers {
 				DefaultRequestVersion = new Version(2, 0),
 				DefaultRequestHeaders = {
 					UserAgent = {
-						new ProductInfoHeaderValue("new-infofer-scraper", "0.0.1"),
-						new ProductInfoHeaderValue("(developed by DC Dev as a hobby, get in touch at webmaster<at>dcdev.ro for any issues)"),
+						new ProductInfoHeaderValue("infotren-scraper", "0.0.2"),
+						new ProductInfoHeaderValue("(developed as a hobby)"),
 					},
 				},
 			};
