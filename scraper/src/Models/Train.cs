@@ -40,6 +40,11 @@ namespace InfoferScraper.Models.Train {
 		public int Delay { get; }
 		public string Station { get; }
 		public StatusKind State { get; }
+		/// <summary>
+		///     The time when the real time report was introduced in the system
+		/// </summary>
+		public DateTimeOffset? ReportTime { get; }
+		public ITrainRoute? Between { get; }
 	}
 
 	public interface ITrainStopDescription {
@@ -102,6 +107,9 @@ namespace InfoferScraper.Models.Train {
 		DetachingWagons,
 		ReceivingWagons,
 		DepartsAs,
+		BusReplacementStartingHere,
+		BusReplacement,
+		BusReplacementEndingHere,
 	}
 
 	#region Implementations
@@ -166,6 +174,14 @@ namespace InfoferScraper.Models.Train {
 		public int Delay { get; set; }
 		public string Station { get; set; } = "";
 		public StatusKind State { get; set; }
+		public DateTimeOffset? ReportTime { get; set; }
+		public ITrainRoute? Between { get; set; }
+
+		internal void MakeBetween(Action<TrainRoute> configurator) {
+			TrainRoute newRoute = new();
+			configurator(newRoute);
+			Between = newRoute;
+		}
 	}
 
 	internal record TrainStopDescription : ITrainStopDescription {
@@ -214,6 +230,18 @@ namespace InfoferScraper.Models.Train {
 			public string Station { get; set; } = "";
 		}
 
+		class BusReplacementStartingHereNote : ITrainStopNote {
+			public NoteKind Kind => NoteKind.BusReplacementStartingHere;
+		}
+
+		class BusReplacementNote : ITrainStopNote {
+			public NoteKind Kind => NoteKind.BusReplacement;
+		}
+
+		class BusReplacementEndingHereNote : ITrainStopNote {
+			public NoteKind Kind => NoteKind.BusReplacementEndingHere;
+		}
+
 		internal void AddDepartsAsNote(string rank, string number, DateTimeOffset departureDate) {
 			ModifyableNotes.Add(new DepartsAsNote { Rank = rank, Number = number, DepartureDate = departureDate });
 		}
@@ -228,6 +256,18 @@ namespace InfoferScraper.Models.Train {
 
 		internal void AddDetachingWagonsNote(string station) {
 			ModifyableNotes.Add(new DetachingWagonsNote { Station = station });
+		}
+
+		internal void AddBusReplacementStartingHereNote() {
+			ModifyableNotes.Add(new BusReplacementStartingHereNote {});
+		}
+
+		internal void AddBusReplacementNote() {
+			ModifyableNotes.Add(new BusReplacementNote {});
+		}
+
+		internal void AddBusReplacementEndingHereNote() {
+			ModifyableNotes.Add(new BusReplacementEndingHereNote {});
 		}
 	}
 

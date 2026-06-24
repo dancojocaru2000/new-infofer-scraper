@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -28,6 +28,10 @@ namespace InfoferScraper.Scrapers {
 			new(
 				@"^(?:Fără|([0-9]+)\smin)\s(întârziere|mai\sdevreme)\sla\s(trecerea\sfără\soprire\sprin|sosirea\sîn|plecarea\sdin)\s(.+)(?:\s\(Raportat\sla\s([0-9]+):([0-9]+)\))?\.");
 
+		private static readonly Regex SlExpandedRegex =
+			new(
+				@"^(?:Fără|([0-9]+)\smin)\s(întârziere|mai\sdevreme)\sla\s(trecerea\sfără\soprire\sprin|sosirea\sîn|plecarea\sdin)\s(.+)(?:\s\(Raportat\sla\s([0-9]+):([0-9]+)\))?\.\sConform\sitinerariului,\strenul\sse\saflă\sîntre\sstațiile\s(.+)\s-\s(.+)\.\sPuteți\sapăsa\spe\sbutonul\s”Hartă”\spentru\sa\svedea\slocația.");
+
 		private static readonly Dictionary<char, StatusKind> SlStateMap = new() {
 			{ 't', StatusKind.Passing },
 			{ 's', StatusKind.Arrival },
@@ -49,6 +53,12 @@ namespace InfoferScraper.Scrapers {
 			new(@"^Trenul primește vagoane de la\s(.+)\.$");
 		private static readonly Regex DetachingWagonsNoteRegex = 
 			new(@"^Trenul detașează vagoane pentru stația\s(.+)\.$");
+		private static readonly Regex BusReplacementStartingHereNoteRegex =
+			new(@"^\s*Transfer\scu\sautobuzul\sîncepând\scu\saceastă\sstație\s*$");
+		private static readonly Regex BusReplacementNoteRegex =
+			new(@"^Transfer cu autobuzul$");
+		private static readonly Regex BusReplacementEndingHereNoteRegex =
+			new(@"^\s*Transfer\scu\sautobuzul\spână\sla\saceastă\sstație\s*$");
 
 		private static readonly DateTimeZone BucharestTz = DateTimeZoneProviders.Tzdb["Europe/Bucharest"];
 
@@ -144,22 +154,6 @@ namespace InfoferScraper.Scrapers {
 							.Select(group => group.Value);
 					});
 
-					try {
-						var statusLineMatch =
-							SlRegex.Match(statusDiv.QuerySelector(":scope > div")!.Text().WithCollapsedSpaces());
-						var (slmDelay, (slmLate, (slmArrival, (slmStation, _)))) =
-							(statusLineMatch.Groups as IEnumerable<Group>).Skip(1).Select(group => group.Value);
-						group.MakeStatus(status => {
-							status.Delay = string.IsNullOrEmpty(slmDelay) ? 0 :
-								slmLate == "întârziere" ? int.Parse(slmDelay) : -int.Parse(slmDelay);
-							status.Station = slmStation;
-							status.State = SlStateMap[slmArrival[0]];
-						});
-					}
-					catch {
-						// ignored
-					}
-
 					Utils.DateTimeSequencer dtSeq = new(date.Year, date.Month, date.Day);
 					var stations = statusDiv.QuerySelectorAll(":scope > ul > li");
 					foreach (var station in stations) {
@@ -242,7 +236,7 @@ namespace InfoferScraper.Scrapers {
 
 							foreach (var noteDiv in stopNotes.QuerySelectorAll(":scope > div > div")) {
 								var noteText = noteDiv.Text().WithCollapsedSpaces();
-								Match trainNumberChangeMatch, departsAsMatch, detachingWagons, receivingWagons;
+								Match trainNumberChangeMatch, departsAsMatch, detachingWagons, receivingWagons, busReplacementStart, busReplacement, busReplacementEnd;
 								if ((trainNumberChangeMatch = TrainNumberChangeNoteRegex.Match(noteText)).Success) {
 									stopDescription.AddTrainNumberChangeNote(trainNumberChangeMatch.Groups[1].Value, trainNumberChangeMatch.Groups[2].Value);
 								}
@@ -257,8 +251,68 @@ namespace InfoferScraper.Scrapers {
 								else if ((receivingWagons = ReceivingWagonsNoteRegex.Match(noteText)).Success) {
 									stopDescription.AddReceivingWagonsNote(receivingWagons.Groups[1].Value);
 								}
+								else if ((busReplacementStart = BusReplacementStartingHereNoteRegex.Match(noteText)).Success) {
+									stopDescription.AddBusReplacementStartingHereNote();
+								}
+								else if ((busReplacement = BusReplacementNoteRegex.Match(noteText)).Success) {
+									stopDescription.AddBusReplacementNote();
+								}
+								else if ((busReplacementEnd = BusReplacementEndingHereNoteRegex.Match(noteText)).Success) {
+									stopDescription.AddBusReplacementEndingHereNote();
+								}
 							}
 						});
+					}
+
+					try {
+						var statusLineText = statusDiv.QuerySelector(":scope > div")!.Text().WithCollapsedSpaces();
+						var statusLineExpandedMatch = SlExpandedRegex.Match(statusLineText);
+						var statusLineMatch = SlRegex.Match(statusLineText);
+
+						var realMatch = statusLineExpandedMatch.Success ? statusLineExpandedMatch
+							: statusLineMatch.Success ? statusLineMatch
+							: null;
+
+						if (realMatch != null) {
+							var (slmDelay, (slmLate, (slmArrival, (slmStation,
+								(slmReportH, (slmReportM, (slmBetweenF, (slmBetweenT, _)))))))) =
+									(realMatch.Groups as IEnumerable<Group>).Skip(1).Select(group => group.Value);
+							group.MakeStatus(status => {
+								status.Delay = string.IsNullOrEmpty(slmDelay) ? 0 :
+									slmLate == "întârziere" ? int.Parse(slmDelay) : -int.Parse(slmDelay);
+								status.Station = slmStation;
+								status.State = SlStateMap[slmArrival[0]];
+								if (!string.IsNullOrEmpty(slmReportH) && !string.IsNullOrEmpty(slmReportM)) {
+									var firstDeparture = group.Stations[0].Departure!.ScheduleTime;
+									var potentialReportTime = BucharestTz
+										.AtLeniently(
+											new DateTime(firstDeparture.Year, firstDeparture.Month, firstDeparture.Day, int.Parse(slmReportH), int.Parse(slmReportM), 0)
+												.ToLocalDateTime()
+										)
+										.ToDateTimeOffset();
+									if (potentialReportTime < firstDeparture) {
+										// Assume no reports come in before the train departs
+										var nextDay = firstDeparture.AddDays(1);
+										potentialReportTime = BucharestTz
+											.AtLeniently(
+												new DateTime(nextDay.Year, nextDay.Month, nextDay.Day, potentialReportTime.Hour, potentialReportTime.Minute, 0)
+													.ToLocalDateTime()
+											)
+											.ToDateTimeOffset();
+									}
+									status.ReportTime = potentialReportTime;
+								}
+								if (!string.IsNullOrEmpty(slmBetweenF) && !string.IsNullOrEmpty(slmBetweenT)) {
+									status.MakeBetween(between => {
+										between.From = slmBetweenF;
+										between.To = slmBetweenT;
+									});
+								}
+							});
+						}
+					}
+					catch {
+						// ignored
 					}
 				});
 			}
