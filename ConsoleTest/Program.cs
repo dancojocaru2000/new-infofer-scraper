@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Linq;
-using System.Text.Json;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 using InfoferScraper;
 using InfoferScraper.Scrapers;
 
@@ -37,13 +38,15 @@ async Task PrintTrain() {
 	if (trainNumber == null) {
 		return;
 	}
-	
+
 	Console.WriteLine(
-		JsonSerializer.Serialize(
+		JsonConvert.SerializeObject(
 			await new TrainScraper().Scrape(trainNumber),
-			new JsonSerializerOptions {
-				PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-				WriteIndented = true,
+			new JsonSerializerSettings {
+				Formatting = Formatting.Indented,
+				ContractResolver = new DefaultContractResolver {
+					NamingStrategy = new CamelCaseNamingStrategy(),
+				},
 			}
 		)
 	);
@@ -55,13 +58,15 @@ async Task PrintStation() {
 	if (stationName == null) {
 		return;
 	}
-	
+
 	Console.WriteLine(
-		JsonSerializer.Serialize(
+		JsonConvert.SerializeObject(
 			await new StationScraper().Scrape(stationName),
-			new JsonSerializerOptions {
-				PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-				WriteIndented = true,
+			new JsonSerializerSettings {
+				Formatting = Formatting.Indented,
+				ContractResolver = new DefaultContractResolver {
+					NamingStrategy = new CamelCaseNamingStrategy(),
+				},
 			}
 		)
 	);
@@ -75,21 +80,21 @@ async Task ScrapeItineraries() {
 	if (from == null || to == null) return;
 
 	var data = await new RouteScraper().Scrape(from, to);
-    
+
 	Console.WriteLine($"{data.Count} itineraries:");
 	Console.WriteLine();
 
 	void PrintArrDepLine(DateTimeOffset date, string station) {
 		Console.WriteLine($"{date:HH:mm} {station}");
 	}
-    
+
 	foreach (var itinerary in data) {
 		foreach (var train in itinerary.Trains) {
 			PrintArrDepLine(train.DepartureDate, train.From);
 			Console.WriteLine($"  {train.TrainRank,-4} {train.TrainNumber,-5} ({train.Operator}), {train.Km,3} km via {string.Join(", ", train.IntermediateStops)}");
 			PrintArrDepLine(train.ArrivalDate, train.To);
 		}
-        
+
 		Console.WriteLine();
 	}
 }
