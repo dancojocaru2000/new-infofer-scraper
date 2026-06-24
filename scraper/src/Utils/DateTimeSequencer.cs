@@ -16,7 +16,10 @@ namespace InfoferScraper {
 
 			public DateTime Next(int hour, int minute = 0, int second = 0) {
 				DateTime potentialNewDate = new(_current.Year, _current.Month, _current.Day, hour, minute, second);
-				if (_current > potentialNewDate) potentialNewDate = potentialNewDate.AddDays(1);
+				if (_current >= potentialNewDate) {
+					_current = potentialNewDate.AddDays(1);
+					potentialNewDate = new(_current.Year, _current.Month, _current.Day, hour, minute, second);
+				}
 				_current = potentialNewDate;
 				return _current;
 			}
